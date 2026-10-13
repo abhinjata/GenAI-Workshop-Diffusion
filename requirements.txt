@@ -1,0 +1,7 @@
+torch
+torchvision
+diffusers
+matplotlib
+numpy
+scikit-learn        # visualize.py --represent
+# For sd_demo.py (GPU): transformers accelerate

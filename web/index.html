@@ -1,0 +1,1326 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Diffusion Lab</title>
+<meta name="color-scheme" content="dark">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500;600&display=swap">
+<style>
+/* Enigma look: black canvas + drifting plexus, cyan gradient type, glass panels, metal buttons.
+   Layout: one long lab bench. Each station = header rail + workbench grid + activity card.
+   Color carries meaning: --sig is the clean image x0, --eps is the noise. */
+:root {
+  --bg: #000;
+  --surface: #0b0d11;
+  --glass: rgba(10, 12, 16, .62);
+  --ink: #f1f5f9;
+  --muted: #94a3b8;
+  --line: rgba(255,255,255,.1);
+  --line-2: rgba(255,255,255,.2);
+  --sig: #60a5fa;
+  --eps: #fb923c;
+  --ok: #4ade80;
+  --cyan: #a5f3fc;
+  --cyan-soft: rgba(207,250,254,.8);
+  --teal: #089cb4;
+  --pixel-bg: #000;
+  --glow: 0 0 30px rgba(59,130,246,.18);
+  --shadow: 0 10px 40px -12px rgba(0,0,0,.9);
+  --f-display: "Geist", "Segoe UI", system-ui, sans-serif;
+  --f-body: "Geist", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "Geist Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --r: 16px;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 400 16px/1.6 var(--f-body); -webkit-font-smoothing: antialiased; }
+#plexus { position: fixed; inset: 0; width: 100%; height: 100%; z-index: -1; pointer-events: none; }
+h1, h2, h3 { font-family: var(--f-display); text-wrap: balance; margin: 0; letter-spacing: -0.02em; }
+h2 { font-size: clamp(1.8rem, 3.6vw, 2.8rem); font-weight: 700; line-height: 1.08; background: linear-gradient(90deg, #fff, #e2e8f0 45%, #94a3b8); -webkit-background-clip: text; background-clip: text; color: transparent; }
+h3 { font-size: 1.08rem; font-weight: 600; }
+p { margin: 0; }
+a { color: var(--sig); }
+a:hover { color: #93c5fd; }
+code, .mono { font-family: var(--f-mono); font-size: .9em; }
+code { color: var(--cyan); }
+.x0 { color: var(--sig); font-weight: 600; }
+.ep { color: var(--eps); font-weight: 600; }
+.wrap { max-width: 1240px; margin: 0 auto; padding-inline: 24px; }
+@media (max-width: 520px) { .wrap { padding-inline: 16px; } }
+
+/* floating header: full width at the top, collapses into a glass pill once scrolled */
+.top { position: fixed; inset: 0 0 auto; z-index: 30; padding-top: 14px; pointer-events: none; }
+.top .bar { pointer-events: auto; max-width: 1240px; margin: 0 auto; display: flex; align-items: center; gap: 18px; padding: 12px 24px; border: 1px solid transparent; border-radius: 18px; transition: max-width .35s ease, background .35s ease, border-color .35s ease, box-shadow .35s ease; }
+.top.scrolled .bar { max-width: 1080px; background: rgba(0,0,0,.6); border-color: var(--line); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); box-shadow: 0 20px 40px -20px rgba(0,0,0,.9); }
+@media (max-width: 1120px) { .top .bar { margin-inline: 12px; } }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 1.15rem; white-space: nowrap; color: #fff; text-decoration: none; }
+.brand img { width: 30px; height: 30px; display: block; }
+.brand small { font: 500 .78rem var(--f-mono); color: var(--muted); padding-left: 10px; border-left: 1px solid var(--line); }
+.nav { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; flex: 1; min-width: 0; }
+.nav a:first-child { margin-left: auto; } .nav a:last-child { margin-right: auto; }
+.nav::-webkit-scrollbar { display: none; }
+.nav a { text-decoration: none; color: var(--cyan-soft); font-size: .86rem; font-weight: 500; padding: 6px 10px; border-radius: 8px; white-space: nowrap; transition: color .2s, background .2s; }
+.nav a b { font: 500 .74rem var(--f-mono); color: var(--muted); margin-right: 5px; }
+.nav a:hover, .nav a:focus-visible { color: #cffafe; background: rgba(255,255,255,.05); }
+.nav a[aria-current="true"] { color: #fff; background: rgba(255,255,255,.08); }
+.nav a[aria-current="true"] b { color: var(--cyan); }
+.status { font: 500 .76rem var(--f-mono); color: #e2e8f0; white-space: nowrap; display: flex; align-items: center; gap: 8px; padding: 7px 12px; border: 1px solid var(--line-2); background: rgba(255,255,255,.05); border-radius: 8px; backdrop-filter: blur(6px); }
+.status i { width: 7px; height: 7px; border-radius: 50%; background: #facc15; display: inline-block; animation: blink 1.2s ease-in-out infinite; }
+.status.ready i { background: var(--ok); box-shadow: 0 0 10px var(--ok); animation: none; }
+@keyframes blink { 50% { opacity: .3; } }
+@media (max-width: 1360px) { .brand small { display: none; } .nav a b { display: none; } }
+@media (max-width: 640px) { .top .bar { flex-wrap: wrap; gap: 8px 12px; padding: 10px 14px; } .nav { order: 3; flex-basis: 100%; } .status { margin-left: auto; } }
+
+/* hero */
+.hero { min-height: min(100svh, 860px); padding-block: 130px 48px; display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 56px; align-items: center; }
+.hero h1 { font-size: clamp(2.7rem, 6.4vw, 4.8rem); font-weight: 800; line-height: 1.02; letter-spacing: -0.035em; background: linear-gradient(90deg, #ecfeff, #cffafe 45%, #67e8f9); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.hero h1 span { background: linear-gradient(90deg, #fdba74, #fb923c 60%, #ea580c); -webkit-background-clip: text; background-clip: text; }
+.hero .sub { margin-top: 8px; font-size: clamp(1.4rem, 2.8vw, 2.2rem); font-weight: 500; line-height: 1.15; letter-spacing: -0.02em; color: rgba(165,243,252,.8); }
+.hero .lede { margin-top: 22px; font-size: 1.12rem; color: var(--cyan-soft); max-width: 54ch; }
+.hero .ctas { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 28px; }
+@media (max-width: 960px) { .hero { grid-template-columns: minmax(0, 1fr); gap: 36px; min-height: 0; padding-block: 120px 24px; } }
+
+/* terminal frame, as in Enigma's hero */
+.term { background: rgba(0,0,0,.45); border: 1px solid rgba(51,65,85,.6); border-radius: 18px; padding: 16px; font: 400 .78rem/1.6 var(--f-mono); color: #cbd5e1; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); box-shadow: var(--shadow); }
+.term .cmd { margin-bottom: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.term .cmd::before { content: "enigma@diffusion-lab:~$ "; color: var(--ok); }
+.term .cmd .caret { display: inline-block; width: .6em; height: 1.1em; vertical-align: -.2em; background: #cbd5e1; animation: blink 1s steps(1) infinite; margin-left: 2px; }
+.hero-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.hero-grid canvas { outline: 1px solid rgba(255,255,255,.06); }
+.hero-cap { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 12px; color: var(--muted); flex-wrap: wrap; }
+.hero-cap span::before { content: "> "; color: var(--ok); }
+
+/* plan */
+.plan { margin-block: 8px 24px; display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.plan a { padding: 14px 16px; text-decoration: none; color: var(--ink); display: grid; gap: 3px; background: var(--glass); border: 1px solid var(--line); border-radius: 14px; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); transition: border-color .3s, box-shadow .3s, transform .3s; }
+.plan a:hover, .plan a:focus-visible { border-color: var(--line-2); box-shadow: var(--glow); transform: translateY(-2px); color: var(--ink); }
+.plan b { font: 500 .72rem var(--f-mono); color: var(--cyan); letter-spacing: .06em; }
+.plan span { font-weight: 600; font-size: .98rem; }
+.plan small { color: var(--muted); font-size: .8rem; }
+
+/* stations */
+.station { padding-block: 96px 24px; scroll-margin-top: 70px; position: relative; }
+.station::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 1px; background: linear-gradient(90deg, transparent, rgba(255,255,255,.14), transparent); }
+.st-head { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 24px; margin-bottom: 32px; }
+.st-num { font: 600 4.2rem/0.9 var(--f-mono); color: transparent; -webkit-text-stroke: 1px rgba(165,243,252,.35); letter-spacing: -0.04em; }
+.st-meta small { display: inline-block; margin-top: 12px; font: 500 .72rem var(--f-mono); color: var(--cyan-soft); padding: 2px 8px; border: 1px solid rgba(8,156,180,.4); background: rgba(8,156,180,.12); border-radius: 4px; }
+.eyebrow { font: 500 .76rem var(--f-mono); text-transform: uppercase; letter-spacing: .12em; color: var(--cyan); margin-bottom: 10px; }
+.lede { color: #cbd5e1; max-width: 70ch; margin-top: 14px; font-size: 1.05rem; }
+@media (max-width: 600px) { .st-head { grid-template-columns: 1fr; gap: 6px; } .st-num { font-size: 2.6rem; } .station { padding-block: 64px 16px; } }
+
+.bench { display: grid; gap: 18px; grid-template-columns: repeat(12, minmax(0, 1fr)); }
+.panel { background: var(--glass); border: 1px solid var(--line); border-radius: var(--r); padding: 18px; min-width: 0; display: grid; gap: 12px; align-content: start; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); transition: border-color .4s, box-shadow .4s; }
+.panel:hover { border-color: rgba(255,255,255,.16); box-shadow: 0 0 40px rgba(59,130,246,.08); }
+.c4 { grid-column: span 4; } .c5 { grid-column: span 5; } .c6 { grid-column: span 6; } .c7 { grid-column: span 7; } .c8 { grid-column: span 8; } .c12 { grid-column: span 12; }
+@media (max-width: 900px) { .c4, .c5, .c6, .c7, .c8 { grid-column: span 12; } }
+.panel h3 { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; flex-wrap: wrap; color: #fff; }
+.panel h3 small { font: 400 .74rem var(--f-mono); color: var(--muted); }
+.note { color: var(--muted); font-size: .9rem; }
+
+canvas.px { image-rendering: pixelated; width: 100%; aspect-ratio: 1; background: var(--pixel-bg); border-radius: 8px; display: block; max-width: 100%; }
+canvas.chart { width: 100%; height: 170px; display: block; }
+.trio { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 12px; align-items: end; }
+.fig { display: grid; gap: 6px; min-width: 0; }
+.fig figcaption, .fig .cap { font: 500 .76rem var(--f-mono); color: var(--muted); text-align: center; }
+.fig.sig canvas { outline: 2px solid var(--sig); outline-offset: 2px; box-shadow: 0 0 18px rgba(96,165,250,.25); }
+.fig.eps canvas { outline: 2px solid var(--eps); outline-offset: 2px; box-shadow: 0 0 18px rgba(251,146,60,.22); }
+.strip { display: grid; grid-template-columns: repeat(var(--n, 6), minmax(0, 1fr)); gap: 8px; }
+.grid16 { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 6px; background: #000; padding: 10px; border-radius: 12px; border: 1px solid rgba(51,65,85,.6); }
+@media (max-width: 520px) { .grid16 { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+
+.eq { font: 500 .98rem/1.6 var(--f-mono); color: #e2e8f0; background: rgba(255,255,255,.035); border: 1px solid rgba(255,255,255,.06); border-radius: 10px; padding: 12px 14px; overflow-x: auto; white-space: nowrap; }
+.eq .num { color: var(--muted); font-weight: 400; }
+
+/* controls */
+.row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+button, select, input[type="number"], input[type="text"] { font: 500 .88rem var(--f-body); color: var(--ink); background: rgba(255,255,255,.05); border: 1px solid var(--line); border-radius: 8px; padding: 8px 14px; transition: background .25s, border-color .25s, box-shadow .25s, filter .25s, transform .1s; }
+select { background-color: var(--surface); }
+button { cursor: pointer; }
+button:hover { background: rgba(255,255,255,.1); border-color: var(--line-2); box-shadow: 0 0 24px rgba(59,130,246,.18); }
+button:active { transform: translateY(1px); }
+/* metal buttons: gradient face inside a gradient rim, as in Enigma's MetalButton */
+button.primary, .metal { color: #fff; font-weight: 600; border: 1.25px solid transparent; text-shadow: 0 -1px 0 rgba(30,58,138,1);
+  background: linear-gradient(#3b82f6, #1d4ed8) padding-box, linear-gradient(#1e3a8a, #60a5fa) border-box;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.28), 0 4px 14px -4px rgba(37,99,235,.55); }
+.metal.orange { text-shadow: 0 -1px 0 rgba(194,65,12,1); background: linear-gradient(#fb923c, #ea580c) padding-box, linear-gradient(#c2410c, #fdba74) border-box; box-shadow: inset 0 1px 0 rgba(255,255,255,.3), 0 4px 14px -4px rgba(234,88,12,.55); }
+button.primary:hover, .metal:hover { filter: brightness(1.12); border-color: transparent; background: linear-gradient(#3b82f6, #1d4ed8) padding-box, linear-gradient(#1e3a8a, #60a5fa) border-box; box-shadow: inset 0 1px 0 rgba(255,255,255,.28), 0 6px 22px -4px rgba(37,99,235,.7); }
+.metal.orange:hover { background: linear-gradient(#fb923c, #ea580c) padding-box, linear-gradient(#c2410c, #fdba74) border-box; box-shadow: inset 0 1px 0 rgba(255,255,255,.3), 0 6px 22px -4px rgba(234,88,12,.7); }
+a.metal { display: inline-flex; align-items: center; text-decoration: none; border-radius: 8px; padding: 10px 20px; font-size: .95rem; }
+.ctas .metal { padding: 11px 22px; font-size: .98rem; }
+button:disabled { opacity: .45; cursor: progress; filter: none; }
+button[aria-pressed="true"] { background: rgba(8,156,180,.22); color: #ecfeff; border-color: rgba(8,156,180,.65); box-shadow: 0 0 18px rgba(8,156,180,.2); }
+:focus-visible { outline: 2px solid #67e8f9; outline-offset: 2px; }
+input[type="number"] { width: 92px; }
+input[type="text"]:focus, input[type="number"]:focus, select:focus { border-color: rgba(103,232,249,.5); outline: none; box-shadow: 0 0 0 3px rgba(103,232,249,.12); }
+label.slider { display: grid; gap: 6px; font: 500 .8rem var(--f-mono); color: var(--muted); width: 100%; }
+label.slider output { color: #fff; }
+input[type="range"] { width: 100%; accent-color: var(--eps); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chips button { padding: 6px 12px; font: 500 .8rem var(--f-mono); }
+
+/* digit source picker */
+.source { display: grid; gap: 10px; }
+.thumbs { display: grid; grid-template-columns: repeat(9, minmax(0, 1fr)); gap: 6px; }
+.thumbs button { padding: 0; border-radius: 8px; overflow: hidden; border: 2px solid rgba(255,255,255,.06); background: #000; aspect-ratio: 1; box-shadow: none; }
+.thumbs button:hover { border-color: var(--line-2); background: #000; }
+.thumbs button[aria-pressed="true"] { border-color: var(--sig); background: #000; box-shadow: 0 0 14px rgba(96,165,250,.35); }
+.thumbs button canvas { width: 100%; height: 100%; image-rendering: pixelated; display: block; }
+.thumbs .drawbtn { color: var(--cyan); font: 600 .68rem var(--f-mono); }
+.pad { display: grid; grid-template-columns: minmax(0, 220px) minmax(0, 1fr); gap: 12px; align-items: start; }
+.pad canvas { width: 100%; aspect-ratio: 1; background: #000; border-radius: 10px; border: 1px solid rgba(51,65,85,.7); touch-action: none; cursor: crosshair; display: block; }
+@media (max-width: 520px) { .pad { grid-template-columns: 1fr; } .thumbs { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+
+/* activity card: Enigma's teal "ongoing" treatment */
+.activity { margin-top: 20px; border: 1px solid rgba(8,156,180,.45); border-radius: var(--r); padding: 18px 20px; display: grid; gap: 10px; background: linear-gradient(135deg, rgba(8,156,180,.14), rgba(8,156,180,.04) 60%), rgba(0,0,0,.55); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); color: #e2e8f0; }
+.activity .eyebrow { margin: 0; display: inline-flex; align-items: center; gap: 8px; color: #e2e8f0; text-transform: none; letter-spacing: 0; font: 600 .95rem var(--f-body); }
+.activity .eyebrow::before { content: "Activity"; background: rgba(8,156,180,.85); color: #fff; font: 600 .7rem var(--f-mono); text-transform: uppercase; letter-spacing: .08em; padding: 3px 8px; border-radius: 3px; }
+.activity ol { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; }
+.activity li::marker { color: var(--cyan); font-family: var(--f-mono); }
+.activity .note { color: #94a3b8; }
+.math { margin-top: 18px; border-left: 2px solid var(--sig); padding: 4px 0 4px 18px; display: grid; gap: 8px; max-width: 82ch; }
+.math p { color: var(--muted); }
+.math b { color: #fff; }
+
+.quiz { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; }
+@media (max-width: 760px) { .quiz { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.quiz .card { display: grid; gap: 6px; }
+.quiz .card button { font-family: var(--f-mono); font-size: .76rem; padding: 5px; }
+.quiz .ans { font: 700 1.25rem var(--f-mono); text-align: center; min-height: 1.4em; color: var(--ok); text-shadow: 0 0 12px rgba(74,222,128,.5); }
+
+.stat { display: grid; grid-template-columns: auto 1fr auto; gap: 10px 12px; align-items: center; font-size: .88rem; color: #cbd5e1; }
+.stat .bar { height: 8px; background: rgba(255,255,255,.06); border-radius: 4px; overflow: hidden; }
+.stat .bar i { display: block; height: 100%; background: #475569; border-radius: 4px; }
+.stat .bar i.best { background: linear-gradient(90deg, #1d4ed8, var(--sig)); box-shadow: 0 0 12px rgba(96,165,250,.5); }
+.stat b { font-family: var(--f-mono); font-variant-numeric: tabular-nums; font-weight: 500; color: #fff; }
+
+.mapwrap { position: relative; }
+.mapwrap canvas { width: 100%; aspect-ratio: 1; display: block; background: rgba(0,0,0,.5); border: 1px solid rgba(51,65,85,.5); border-radius: 12px; touch-action: none; }
+.tip { position: absolute; pointer-events: none; background: var(--surface); border: 1px solid var(--line-2); border-radius: 8px; padding: 4px; box-shadow: var(--shadow); display: grid; gap: 2px; justify-items: center; font: 500 .72rem var(--f-mono); }
+.tip canvas { width: 56px; height: 56px; aspect-ratio: auto; image-rendering: pixelated; background: #000; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 12px; font: 500 .76rem var(--f-mono); color: var(--muted); }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 4px; vertical-align: -1px; }
+
+.toy canvas { width: 100%; aspect-ratio: 2.2; background: #000; border: 1px solid rgba(51,65,85,.5); border-radius: 12px; display: block; }
+
+/* SD pipeline */
+.pipe { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0; align-items: stretch; }
+.pipe .node { background: var(--glass); border: 1px solid var(--line); border-radius: 14px; padding: 14px; display: grid; gap: 4px; align-content: start; position: relative; margin-right: 24px; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+.pipe .node:last-child { margin-right: 0; }
+.pipe .node:not(:last-child)::after { content: "→"; position: absolute; right: -20px; top: 50%; transform: translateY(-50%); color: var(--cyan); font-family: var(--f-mono); }
+.pipe .node b { font: 600 .95rem var(--f-display); color: #fff; }
+.pipe .node small { font: 400 .74rem var(--f-mono); color: var(--muted); }
+.pipe .node.hot { border-color: rgba(251,146,60,.6); box-shadow: 0 0 30px rgba(251,146,60,.15); }
+@media (max-width: 900px) { .pipe { grid-template-columns: 1fr; gap: 20px; } .pipe .node { margin-right: 0; } .pipe .node:not(:last-child)::after { content: "↓"; right: auto; left: 50%; top: auto; bottom: -19px; transform: translateX(-50%); } }
+.tbl { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: .9rem; }
+th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid rgba(255,255,255,.07); vertical-align: top; }
+th { font: 500 .72rem var(--f-mono); color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+td.mono, td code { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+.promptout { font: 500 .92rem/1.6 var(--f-mono); background: rgba(0,0,0,.6); border: 1px solid rgba(51,65,85,.6); color: #e2e8f0; padding: 14px 16px; border-radius: 12px; white-space: pre-wrap; word-break: break-word; min-height: 3.2em; }
+.promptout::before { content: "prompt> "; color: var(--ok); }
+.fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.fields label { display: grid; gap: 5px; font: 500 .76rem var(--f-mono); color: var(--muted); }
+.fields input { width: 100%; }
+@media (max-width: 600px) { .fields { grid-template-columns: 1fr; } }
+
+footer { margin-top: 64px; border-top: 1px solid var(--line); background: #000; }
+footer .wrap { padding-block: 32px 48px; display: grid; gap: 18px; }
+footer .brand { font-size: 1.05rem; }
+footer p { color: var(--muted); font-size: .86rem; max-width: 110ch; }
+
+/* fade-in-blur on scroll, like Enigma's TextEffect preset */
+.reveal-on .rv { opacity: 0; filter: blur(10px); transform: translateY(10px); transition: opacity .8s ease, filter .8s ease, transform .8s ease; }
+.reveal-on .rv.in { opacity: 1; filter: none; transform: none; }
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .status i, .term .cmd .caret { animation: none; }
+  .reveal-on .rv { opacity: 1; filter: none; transform: none; transition: none; }
+}
+</style>
+
+<canvas id="plexus" aria-hidden="true"></canvas>
+
+<header class="top" id="top">
+  <div class="bar">
+    <a class="brand" href="#"><img src="enigma-logo.png" alt="" width="30" height="30">Enigma<small>Diffusion Lab</small></a>
+    <nav class="nav" aria-label="Stations">
+      <a href="#noise"><b>01</b>Noise</a><a href="#forward"><b>02</b>Noising</a><a href="#denoise"><b>03</b>Denoising</a><a href="#generate"><b>04</b>Sampling</a><a href="#represent"><b>05</b>Representations</a><a href="#guidance"><b>06</b>Conditioning</a><a href="#sd"><b>07</b>Stable Diffusion</a>
+    </nav>
+    <div class="status" id="status" role="status"><i></i><span>loading model…</span></div>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="hero">
+    <div>
+      <h1 class="rv">Every image starts as <span>static</span>.</h1>
+      <p class="sub rv">Diffusion, from scratch.</p>
+      <p class="lede rv">A diffusion model learns one skill: look at a noisy image and say which part is noise. Repeat that skill fifty times, starting from pure static, and a picture appears. Everything on this page runs a real 636K-parameter U-Net, trained on MNIST, live in your browser.</p>
+      <div class="ctas rv">
+        <a class="metal" href="#noise">Start at station 1</a>
+        <button class="metal orange" id="heroBtn" type="button">Generate again</button>
+      </div>
+    </div>
+    <div class="term rv">
+      <div class="cmd">python sample.py --n 8 --steps 50<span class="caret"></span></div>
+      <div class="hero-grid" id="heroGrid"></div>
+      <div class="hero-cap"><span id="heroCap">pure Gaussian noise · t = 980</span></div>
+    </div>
+  </section>
+
+  <nav class="plan" aria-label="Session plan">
+    <a href="#noise"><b>1 · 3 MIN</b><span>Gaussian noise</span><small>Spot the digit</small></a>
+    <a href="#forward"><b>2 · 4 MIN</b><span>Noising</span><small>Bury your own digit</small></a>
+    <a href="#denoise"><b>3 · 4 MIN</b><span>Denoising</span><small>Beat the U-Net</small></a>
+    <a href="#generate"><b>4 · 5 MIN</b><span>Sampling</span><small>Same seed, same digit?</small></a>
+    <a href="#represent"><b>5 · 5 MIN</b><span>Representations</span><small>Find the clusters</small></a>
+    <a href="#guidance"><b>6 · 4 MIN</b><span>Conditioning</span><small>Guidance tug-of-war</small></a>
+    <a href="#sd"><b>7 · 5 MIN</b><span>Stable Diffusion</span><small>Into Prompt Pictionary</small></a>
+  </nav>
+
+  <!-- 1 NOISE -->
+  <section class="station" id="noise">
+    <div class="st-head rv">
+      <div class="st-meta"><div class="st-num">01</div><small>3 min</small></div>
+      <div>
+        <p class="eyebrow">Gaussian noise</p>
+        <h2>Static has a shape</h2>
+        <p class="lede">The “noise” in diffusion is not arbitrary mess. Every pixel is an independent draw from a standard normal distribution, <span class="mono">N(0, 1)</span>. That one fact makes the whole method tractable: Gaussians add to Gaussians, so we can jump to any noise level in a single step, and we always know what pure noise looks like.</p>
+      </div>
+    </div>
+    <div class="bench">
+      <div class="panel c4">
+        <h3>One noise image <small>784 draws from N(0,1)</small></h3>
+        <canvas class="px" id="nzImg" width="28" height="28"></canvas>
+        <div class="row"><button type="button" id="nzBtn">Resample</button><span class="note mono" id="nzStats"></span></div>
+      </div>
+      <div class="panel c8">
+        <h3>Its pixel values <small>histogram vs. the bell curve</small></h3>
+        <canvas class="chart" id="nzHist" style="height:240px"></canvas>
+        <p class="note">Each bar counts pixels in a value range. The line is the N(0,1) density. Resample a few times: the image changes completely, the histogram barely moves. A model can't predict <em>which</em> noise you drew, only that it came from this distribution.</p>
+      </div>
+    </div>
+    <div class="activity">
+      <p class="eyebrow">Activity · Spot the digit</p>
+      <p>Six test digits, each buried under more noise than the last. Everyone writes down a guess for each card, then reveal one at a time. Where does the room stop agreeing?</p>
+      <div class="quiz" id="quiz"></div>
+      <p class="note">Keep the number where you gave up in mind. The U-Net in station 3 will take the same test.</p>
+    </div>
+  </section>
+
+  <!-- 2 FORWARD -->
+  <section class="station" id="forward">
+    <div class="st-head rv">
+      <div class="st-meta"><div class="st-num">02</div><small>4 min</small></div>
+      <div>
+        <p class="eyebrow">Forward process · noising</p>
+        <h2>Burying a digit, one timestep at a time</h2>
+        <p class="lede">Training needs pairs of (noisy image, the noise that was added). The forward process makes them: blend the clean image <span class="x0">x₀</span> with noise <span class="ep">ε</span>, with the blend set by the timestep t. No learning happens here. It is a fixed recipe, the <code>scheduler.add_noise</code> line in <code>train.py</code>.</p>
+      </div>
+    </div>
+    <div class="bench">
+      <div class="panel c5">
+        <h3>Pick a digit, or draw one</h3>
+        <div class="source" data-source></div>
+      </div>
+      <div class="panel c7">
+        <h3>The blend <small>drag t</small></h3>
+        <div class="trio">
+          <figure class="fig sig" style="margin:0"><canvas class="px" id="fwX0" width="28" height="28"></canvas><figcaption>x₀ clean</figcaption></figure>
+          <figure class="fig eps" style="margin:0"><canvas class="px" id="fwEps" width="28" height="28"></canvas><figcaption>ε noise</figcaption></figure>
+          <figure class="fig" style="margin:0"><canvas class="px" id="fwXt" width="28" height="28"></canvas><figcaption id="fwXtCap">x_t</figcaption></figure>
+        </div>
+        <label class="slider" for="fwT"><span>timestep t <output id="fwTout">300</output></span><input type="range" id="fwT" min="0" max="999" value="300"></label>
+        <div class="eq" id="fwEq"></div>
+        <div class="row"><button type="button" id="fwNew">New noise</button><span class="note">Same ε for every t, so you watch one image sink.</span></div>
+      </div>
+      <div class="panel c6">
+        <h3>Noise schedule <small>linear β from 1e-4 to 0.02</small></h3>
+        <canvas class="chart" id="fwSched"></canvas>
+        <p class="note"><span class="x0">√ᾱ_t</span> is how much of the image survives, <span class="ep">√(1−ᾱ_t)</span> is how much noise is mixed in. Their squares always sum to 1, so x_t keeps unit variance the whole way.</p>
+      </div>
+      <div class="panel c6">
+        <h3>Pixel histogram of x_t <small>data → Gaussian</small></h3>
+        <canvas class="chart" id="fwHist"></canvas>
+        <p class="note">MNIST pixels sit almost entirely at −1 (background) and +1 (ink). Slide t up and the two spikes melt into the bell from station 1. At t = 999 the image distribution <em>is</em> N(0, I), which is why sampling can start from plain noise.</p>
+      </div>
+      <div class="panel c12">
+        <h3>Filmstrip <small>same digit, same ε</small></h3>
+        <div class="strip" id="fwStrip" style="--n:8"></div>
+      </div>
+    </div>
+    <div class="activity">
+      <p class="eyebrow">Activity · Bury your own digit</p>
+      <ol>
+        <li>Draw a digit in the pad. Write your initials if you like; the forward process doesn't care what the image is.</li>
+        <li>Find the t where your neighbour can no longer read it. Compare with the √ᾱ curve: how much signal is left there?</li>
+        <li>Why does the schedule keep most of the signal for the first ~200 steps and then drop fast?</li>
+      </ol>
+    </div>
+    <div class="math">
+      <p><b>Closed form.</b> Each step adds a little noise: q(x_t | x_{t−1}) = N(√(1−β_t)·x_{t−1}, β_t·I). Because Gaussians compose, a thousand small steps collapse into one jump:</p>
+      <div class="eq">x_t = √ᾱ_t · <span class="x0">x₀</span> + √(1−ᾱ_t) · <span class="ep">ε</span>,   ᾱ_t = ∏ₛ (1−β_s),   <span class="ep">ε</span> ~ N(0, I)</div>
+      <p>That's why training can pick a random t per image and noise it in one line instead of looping.</p>
+    </div>
+  </section>
+
+  <!-- 3 DENOISE -->
+  <section class="station" id="denoise">
+    <div class="st-head rv">
+      <div class="st-meta"><div class="st-num">03</div><small>4 min</small></div>
+      <div>
+        <p class="eyebrow">Reverse process · denoising</p>
+        <h2>The network's only job: point at the noise</h2>
+        <p class="lede">The U-Net sees x_t and t, and outputs <span class="ep">ε̂</span>, its guess of the noise. Training is mean-squared error between ε̂ and the true ε. Nothing else. Subtract the guess and you get the model's estimate of the clean image, <span class="x0">x̂₀</span>.</p>
+      </div>
+    </div>
+    <div class="bench">
+      <div class="panel c12">
+        <h3>One forward pass of the U-Net <small id="dnInfo">uses the digit from station 2</small></h3>
+        <div class="trio" style="grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));">
+          <figure class="fig" style="margin:0"><canvas class="px" id="dnXt" width="28" height="28"></canvas><figcaption>input x_t</figcaption></figure>
+          <figure class="fig eps" style="margin:0"><canvas class="px" id="dnEps" width="28" height="28"></canvas><figcaption>true ε</figcaption></figure>
+          <figure class="fig eps" style="margin:0"><canvas class="px" id="dnEpsHat" width="28" height="28"></canvas><figcaption>predicted ε̂</figcaption></figure>
+          <figure class="fig" style="margin:0"><canvas class="px" id="dnErr" width="28" height="28"></canvas><figcaption>|ε̂ − ε|</figcaption></figure>
+          <figure class="fig sig" style="margin:0"><canvas class="px" id="dnX0" width="28" height="28"></canvas><figcaption>estimate x̂₀</figcaption></figure>
+          <figure class="fig" style="margin:0"><canvas class="px" id="dnTrue" width="28" height="28"></canvas><figcaption>actual x₀</figcaption></figure>
+        </div>
+        <div class="bench" style="gap:14px">
+          <div class="c7" style="display:grid;gap:10px;min-width:0">
+            <label class="slider" for="dnT"><span>timestep t <output id="dnTout">500</output></span><input type="range" id="dnT" min="1" max="999" value="500"></label>
+            <div class="row"><button type="button" id="dnNew">New noise</button></div>
+          </div>
+          <div class="c5" style="min-width:0">
+            <div class="eq" id="dnEq">loss = mean((ε̂ − ε)²) = …</div>
+          </div>
+        </div>
+      </div>
+      <div class="panel c12">
+        <h3>What the model believes x₀ is, at each noise level <small>x̂₀ from a single pass</small></h3>
+        <div class="strip" id="dnStrip" style="--n:7"></div>
+        <p class="note">At high t the estimate is a blur: the average of every digit consistent with that input. MSE training rewards the mean of all plausible answers, not a confident pick. As t drops, fewer digits fit and the blur sharpens into one. Sampling (station 4) exploits exactly this: take a small step toward the blur, add a little fresh noise, ask again.</p>
+      </div>
+    </div>
+    <div class="activity">
+      <p class="eyebrow">Activity · Beat the U-Net</p>
+      <ol>
+        <li>Set t ≈ 700, hide the right side of the screen, and let the room guess the digit from x_t.</li>
+        <li>Reveal x̂₀. Who called it first, the room or the network?</li>
+        <li>Find the smallest t where x̂₀ is already the right digit. Compare with where the room gave up in station 1.</li>
+      </ol>
+    </div>
+    <div class="math">
+      <p><b>Training objective</b> (Ho et al., 2020), exactly <code>F.mse_loss(predicted_noise, noise)</code> in <code>train.py</code>:</p>
+      <div class="eq">L = E<sub>x₀, ε, t</sub> ‖ <span class="ep">ε</span> − ε_θ(√ᾱ_t·<span class="x0">x₀</span> + √(1−ᾱ_t)·<span class="ep">ε</span>, t) ‖²     x̂₀ = (x_t − √(1−ᾱ_t)·ε̂) / √ᾱ_t</div>
+      <p>Predicting ε is equivalent to predicting the score ∇ log p(x_t) up to a scale: ε̂ ≈ −√(1−ᾱ_t) · ∇ log p(x_t). The network is learning which direction makes an image more like the data.</p>
+    </div>
+  </section>
+
+  <!-- 4 SAMPLING -->
+  <section class="station" id="generate">
+    <div class="st-head rv">
+      <div class="st-meta"><div class="st-num">04</div><small>5 min</small></div>
+      <div>
+        <p class="eyebrow">Sampling · noise → image</p>
+        <h2>Fifty small corrections</h2>
+        <p class="lede">Start from pure noise. At each step: predict ε̂, move partway toward x̂₀, add a little fresh noise, lower t. No digit is hidden in the starting noise. It gets built along the way, and the model decides which digit early on.</p>
+      </div>
+    </div>
+    <div class="bench">
+      <div class="panel c8">
+        <h3>16 samples <small id="genInfo">ready</small></h3>
+        <div class="grid16" id="genGrid"></div>
+        <div class="row">
+          <button type="button" class="primary" id="genRun">Generate</button>
+          <button type="button" id="genResample" title="Keep the starting noise, change the noise injected at each step">Same start, new step noise</button>
+          <label class="row note" for="genSeed">seed <input type="number" id="genSeed" value="42" min="0" max="99999"></label>
+          <label class="row note" for="genSteps">steps <select id="genSteps"><option>10</option><option>25</option><option selected>50</option><option>100</option></select></label>
+        </div>
+        <div class="row chips" role="group" aria-label="What to show">
+          <button type="button" id="genShowXt" aria-pressed="true">show x_t</button>
+          <button type="button" id="genShowX0" aria-pressed="false">show x̂₀ (current guess)</button>
+        </div>
+      </div>
+      <div class="panel c4">
+        <h3>Sample #1 over time</h3>
+        <div class="strip" id="genStrip" style="--n:3"></div>
+        <p class="note">Switch to “x̂₀” and generate again: the digit's identity is fixed in the first ~20% of steps, and the rest is cleanup. Most of the image gets decided at high noise.</p>
+      </div>
+      <div class="panel c12 toy">
+        <h3>The same algorithm in 2D <small>2,000 particles · MLP denoiser trained on the club's name</small></h3>
+        <canvas id="toyCanvas"></canvas>
+        <div class="row">
+          <button type="button" class="primary" id="toyRev">Denoise from noise</button>
+          <button type="button" id="toyFwd">Diffuse the data</button>
+          <button type="button" id="toyArrows" aria-pressed="true">score arrows</button>
+          <span class="note mono" id="toyInfo">t = 0</span>
+        </div>
+        <p class="note">Each dot is one sample, each arrow is the direction −ε̂ the model pushes a point at the current t. Every 28×28 image above is one dot like these, in 784 dimensions instead of 2.</p>
+      </div>
+    </div>
+    <div class="activity">
+      <p class="eyebrow">Activity · Same seed, same digit?</p>
+      <ol>
+        <li>Everyone sets the seed to the last two digits of their roll number and hits Generate. Same seed on two laptops: same 16 digits?</li>
+        <li>Now press “Same start, new step noise”. The starting static is identical; do you get the same digits? What does that say about how much the injected noise matters?</li>
+        <li>Drop steps to 10. What breaks first, the digit identity or the stroke quality?</li>
+      </ol>
+    </div>
+    <div class="math">
+      <p><b>One DDPM step</b> (what <code>scheduler.step</code> does in <code>visualize.py</code>):</p>
+      <div class="eq">x_{t−1} = c₁·<span class="x0">x̂₀</span> + c₂·x_t + σ_t·z,   c₁ = √ᾱ_{t−1}·β̃/(1−ᾱ_t),   c₂ = √(α_t)·(1−ᾱ_{t−1})/(1−ᾱ_t),   z ~ N(0, I)</div>
+      <p>With 50 steps, each jump skips 20 training timesteps (980, 960, … 0). Deterministic samplers like DDIM set σ = 0, which is why “same start, new step noise” would give identical outputs there.</p>
+    </div>
+  </section>
+
+  <!-- 5 REPRESENTATIONS -->
+  <section class="station" id="represent">
+    <div class="st-head rv">
+      <div class="st-meta"><div class="st-num">05</div><small>5 min</small></div>
+      <div>
+        <p class="eyebrow">Representation learning</p>
+        <h2>It was never told what a 7 is</h2>
+        <p class="lede"><code>train.py</code> throws the labels away: <code>for step, (images, _) in …</code>. Yet to remove noise well, the U-Net has to know what digits look like. That knowledge lives in its internal features. Below, 1,500 test digits are placed by the U-Net's 64-number bottleneck (mid-block, t = 50), squashed to 2D with t-SNE.</p>
+      </div>
+    </div>
+    <div class="bench">
+      <div class="panel c7">
+        <h3>Feature map <small id="mapInfo">hover a point</small></h3>
+        <div class="row chips" role="group" aria-label="Feature space">
+          <button type="button" data-map="random" aria-pressed="false">untrained U-Net</button>
+          <button type="button" data-map="trained" aria-pressed="true">trained U-Net</button>
+          <button type="button" data-map="pixels" aria-pressed="false">raw pixels</button>
+          <button type="button" id="mapColor" aria-pressed="false">color by true label</button>
+        </div>
+        <div class="mapwrap"><canvas id="mapCanvas"></canvas><div class="tip" id="mapTip" hidden><canvas width="28" height="28"></canvas><span></span></div></div>
+        <div class="legend" id="mapLegend" hidden></div>
+      </div>
+      <div class="panel c5">
+        <h3>Linear probe <small>can a straight line read the digit off?</small></h3>
+        <div class="stat">
+          <span>untrained U-Net, 64 feats</span><div class="bar"><i style="width:55.4%"></i></div><b>55.4%</b>
+          <span>raw pixels, 784 values</span><div class="bar"><i style="width:85.5%"></i></div><b>85.5%</b>
+          <span>trained U-Net, 64 feats</span><div class="bar"><i class="best" style="width:94.5%"></i></div><b>94.5%</b>
+          <span>trained U-Net, 3,136 feats</span><div class="bar"><i class="best" style="width:97.8%"></i></div><b>97.8%</b>
+        </div>
+        <p class="note">Logistic regression trained on 5,000 digits, tested on 2,000 others, features taken at t = 50. Same architecture in rows 1 and 3; the only difference is denoising training. 64 learned numbers beat 784 raw pixels.</p>
+        <h3 style="margin-top:6px">Drop your own digit on the map</h3>
+        <div class="source" data-source data-compact></div>
+        <p class="note" id="dropInfo">Draw or pick a digit: it's run through the U-Net and placed among its 10 nearest neighbours in feature space.</p>
+      </div>
+      <div class="panel c12">
+        <h3>Repair a scribble <small>SDEdit: noise it partway, then denoise</small></h3>
+        <div class="bench" style="gap:14px">
+          <div class="c4" style="display:grid;gap:10px;min-width:0">
+            <div class="pad" style="grid-template-columns:1fr"><canvas id="sdeditPad" width="280" height="280" aria-label="Drawing pad"></canvas></div>
+            <div class="row"><button type="button" id="sdeditClear">Clear</button><button type="button" class="primary" id="sdeditRun">Repair</button></div>
+          </div>
+          <div class="c8" style="display:grid;gap:12px;min-width:0;align-content:start">
+            <label class="slider" for="sdeditT"><span>strength (start timestep) <output id="sdeditTout">500</output></span><input type="range" id="sdeditT" min="100" max="980" step="20" value="500"></label>
+            <div class="strip" id="sdeditOut" style="--n:5"></div>
+            <p class="note">Draw something sloppy, like a wobbly 4 or a 3 with a gap. Low strength keeps your strokes and tidies them; high strength keeps only the rough layout and lets the model redraw. This is img2img in Stable Diffusion, and the <code>strength</code> knob there is this slider.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="activity">
+      <p class="eyebrow">Activity · Find the clusters</p>
+      <ol>
+        <li>Start on “untrained U-Net” with colors off. Any structure? Switch to “trained”. How many islands can the room count?</li>
+        <li>Hover the islands to name them. Turn colors on to check. Which two digits share a border, and why those two?</li>
+        <li>Draw a deliberately ambiguous digit (a 4 that could be a 9) and drop it. Where does it land?</li>
+      </ol>
+    </div>
+  </section>
+
+  <!-- 6 GUIDANCE -->
+  <section class="station" id="guidance">
+    <div class="st-head rv">
+      <div class="st-meta"><div class="st-num">06</div><small>4 min</small></div>
+      <div>
+        <p class="eyebrow">Conditioning · classifier-free guidance</p>
+        <h2>A ten-word vocabulary for prompts</h2>
+        <p class="lede">Text-to-image in miniature. A second U-Net, identical except it also receives a label embedding (“the prompt”), added to its timestep embedding. During training the label was hidden 10% of the time, so the same network also learned to generate with an empty prompt ∅. Guidance pushes the prediction away from “any digit” and toward “this digit”.</p>
+      </div>
+    </div>
+    <div class="bench">
+      <div class="panel c8">
+        <h3>Prompt → samples <small id="cfgInfo">ready</small></h3>
+        <div class="chips" role="group" aria-label="Prompt" id="cfgPrompts"></div>
+        <label class="slider" for="cfgW"><span>guidance scale w <output id="cfgWout">3.0</output></span><input type="range" id="cfgW" min="0" max="10" step="0.5" value="3"></label>
+        <div class="grid16" id="cfgGrid"></div>
+        <div class="row"><button type="button" class="primary" id="cfgRun">Generate</button><span class="note">8 samples, 50 steps, seed fixed so only the prompt and w change.</span></div>
+      </div>
+      <div class="panel c4">
+        <h3>The guidance formula</h3>
+        <div class="eq" id="cfgEq" style="white-space:normal"></div>
+        <p class="note">w = 0 ignores the prompt. w = 1 is the plain conditional model. w &gt; 1 extrapolates past it: sharper, more on-prompt, less varied, and eventually over-cooked. Stable Diffusion defaults to w = 7.5.</p>
+      </div>
+    </div>
+    <div class="activity">
+      <p class="eyebrow">Activity · Guidance tug-of-war</p>
+      <ol>
+        <li>Prompt “3”. Before each run, the room predicts: what will w = 0 give? w = 1? w = 10?</li>
+        <li>At w = 1 count how many of the 8 are actually 3s. Raise w until all 8 are. That's the trade: obedience vs. variety.</li>
+        <li>Prompt ∅ (empty) with any w. Why does guidance do nothing here?</li>
+      </ol>
+    </div>
+  </section>
+
+  <!-- 7 STABLE DIFFUSION -->
+  <section class="station" id="sd">
+    <div class="st-head rv">
+      <div class="st-meta"><div class="st-num">07</div><small>5 min</small></div>
+      <div>
+        <p class="eyebrow">Text-to-image · Stable Diffusion</p>
+        <h2>Same loop, three swaps</h2>
+        <p class="lede">Stable Diffusion is stations 2 to 6 with three changes. Pixels become a compressed latent. The ten-digit label becomes a CLIP embedding of your sentence. Label addition becomes cross-attention, so each region of the image can attend to different words.</p>
+      </div>
+    </div>
+    <div class="pipe" aria-label="Stable Diffusion pipeline">
+      <div class="node"><b>Prompt</b><small>“a corgi astronaut, watercolor”</small></div>
+      <div class="node"><b>CLIP text encoder</b><small>tokenize → ≤ 77 tokens → 77 × 768 embeddings</small></div>
+      <div class="node hot"><b>U-Net × 50 steps</b><small>predicts ε in latent space; text enters via cross-attention; CFG with w ≈ 7.5</small></div>
+      <div class="node"><b>VAE decoder</b><small>latent 4 × 64 × 64 → 512 × 512 × 3 pixels (48× fewer numbers)</small></div>
+      <div class="node"><b>Image</b><small>seed picks the starting latent noise</small></div>
+    </div>
+    <div class="bench" style="margin-top:18px">
+      <div class="panel c7">
+        <h3>Every SD knob, already seen today</h3>
+        <div class="tbl"><table>
+          <thead><tr><th>diffusers argument</th><th>what it does</th><th>where you saw it</th></tr></thead>
+          <tbody>
+            <tr><td><code>generator</code> / seed</td><td>chooses the starting noise latent</td><td><a href="#generate">4 · seed</a></td></tr>
+            <tr><td><code>num_inference_steps</code></td><td>how many denoising jumps</td><td><a href="#generate">4 · steps</a></td></tr>
+            <tr><td><code>guidance_scale</code></td><td>w in ε∅ + w(εc − ε∅)</td><td><a href="#guidance">6 · w slider</a></td></tr>
+            <tr><td><code>negative_prompt</code></td><td>replaces the empty prompt ∅, so guidance pushes away from it</td><td><a href="#guidance">6 · ∅ branch</a></td></tr>
+            <tr><td><code>strength</code> (img2img)</td><td>how far to noise your input before denoising</td><td><a href="#represent">5 · repair</a></td></tr>
+            <tr><td>scheduler</td><td>the update rule between steps (DDPM, DDIM, Euler…)</td><td><a href="#generate">4 · DDPM step</a></td></tr>
+          </tbody>
+        </table></div>
+      </div>
+      <div class="panel c5">
+        <h3>Scale check</h3>
+        <div class="tbl"><table>
+          <thead><tr><th></th><th>this lab</th><th>SD 1.5</th></tr></thead>
+          <tbody>
+            <tr><td>denoiser</td><td class="mono">636K params</td><td class="mono">≈ 860M params</td></tr>
+            <tr><td>conditioning</td><td class="mono">11 labels</td><td class="mono">CLIP ViT-L/14, ≈123M</td></tr>
+            <tr><td>works on</td><td class="mono">1 × 28 × 28 px</td><td class="mono">4 × 64 × 64 latent</td></tr>
+            <tr><td>training data</td><td class="mono">60K digits</td><td class="mono">LAION subsets, billions of pairs</td></tr>
+          </tbody>
+        </table></div>
+        <div class="math" style="margin-top:4px">
+          <p><b>Cross-attention.</b> Queries come from image features, keys and values from the text tokens:</p>
+          <div class="eq" style="white-space:normal">Attn = softmax(Q_img K_textᵀ / √d) · V_text</div>
+          <p>Each spatial position picks the words it needs: the “corgi” region attends to “corgi”, the background to “watercolor”.</p>
+        </div>
+      </div>
+      <div class="panel c12">
+        <h3>Prompt builder for Prompt Pictionary <small id="tokInfo"></small></h3>
+        <div class="bench" style="gap:16px">
+          <div class="c6" style="min-width:0">
+            <div class="fields">
+              <label for="pbSubject">subject (put it first)<input type="text" id="pbSubject" value="a corgi in an astronaut suit"></label>
+              <label for="pbAction">action / setting<input type="text" id="pbAction" value="floating above a desert at dusk"></label>
+              <label for="pbStyle">medium / style<input type="text" id="pbStyle" value="loose watercolor illustration"></label>
+              <label for="pbComp">composition / camera<input type="text" id="pbComp" value="centered, low angle, wide shot"></label>
+              <label for="pbLight">lighting / colour<input type="text" id="pbLight" value="warm orange rim light, teal sky"></label>
+              <label for="pbDetail">details<input type="text" id="pbDetail" value="visible paper texture, soft edges"></label>
+            </div>
+          </div>
+          <div class="c6" style="display:grid;gap:10px;min-width:0;align-content:start">
+            <div class="promptout" id="pbOut"></div>
+            <div class="row"><button type="button" id="pbCopy">Copy prompt</button><span class="note" id="pbCopied"></span></div>
+            <p class="note"><b>Between attempt 1 and 2:</b> compare against the target and fix the single biggest mismatch first (usually composition or style), the way one denoising step fixes the coarsest error first. Name concrete visual facts, not vibes. ChatGPT's image model isn't Stable Diffusion and accepts long prompts, but the same habits pay off: subject first, then style, framing, light.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <a class="brand" href="#"><img src="enigma-logo.png" alt="" width="30" height="30">Enigma<small>Diffusion Lab</small></a>
+    <p>Models: <code>ddpm_mnist.pt</code> (unconditional, 10 epochs) and <code>ddpm_mnist_conditional.pt</code> (label-conditioned, CFG dropout 10%), both <code>diffusers.UNet2DModel</code> with 636K parameters, re-implemented in TensorFlow.js and checked against PyTorch to within 2×10⁻⁶. The scheduler is DDPM, linear β, 1,000 training steps. Python versions of every demo are in the workshop kit.</p>
+  </div>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js"></script>
+<script>
+// Tiny diffusers UNet2DModel re-implemented with TensorFlow.js ops (NHWC).
+// Weights come from export_web.py (already in TF layout).
+function makeUNet(tf, manifest, buffer) {
+  const f32 = new Float32Array(buffer);
+  const W = {};
+  for (const [k, [off, shape]] of Object.entries(manifest)) {
+    const n = shape.reduce((a, b) => a * b, 1);
+    W[k] = tf.tensor(f32.subarray(off, off + n), shape);
+  }
+  const G = 8, EPS = 1e-5;
+  const silu = (x) => tf.mul(x, tf.sigmoid(x));
+  const conv = (x, p, stride = 1) => {
+    const w = W[p + '.weight'];
+    const k = w.shape[0];
+    let y;
+    if (k === 1) y = tf.conv2d(x, w, 1, 'valid');
+    else y = tf.conv2d(tf.pad(x, [[0, 0], [1, 1], [1, 1], [0, 0]]), w, stride, 'valid');
+    return tf.add(y, W[p + '.bias']);
+  };
+  const linear = (x, p) => tf.add(tf.matMul(x, W[p + '.weight']), W[p + '.bias']);
+  const gn = (x, p) => {
+    const [B, H, Wd, C] = x.shape;
+    const r = tf.reshape(x, [B, H, Wd, G, C / G]);
+    const { mean, variance } = tf.moments(r, [1, 2, 4], true);
+    const n = tf.div(tf.sub(r, mean), tf.sqrt(tf.add(variance, EPS)));
+    return tf.add(tf.mul(tf.reshape(n, [B, H, Wd, C]), W[p + '.weight']), W[p + '.bias']);
+  };
+  const resnet = (x, temb, p) => {
+    let h = conv(silu(gn(x, p + '.norm1')), p + '.conv1');
+    const t = linear(silu(temb), p + '.time_emb_proj');
+    h = tf.add(h, tf.reshape(t, [t.shape[0], 1, 1, t.shape[1]]));
+    h = conv(silu(gn(h, p + '.norm2')), p + '.conv2');
+    const sc = W[p + '.conv_shortcut.weight'] ? conv(x, p + '.conv_shortcut') : x;
+    return tf.add(sc, h);
+  };
+  const attention = (x, p) => {
+    const [B, H, Wd, C] = x.shape, L = H * Wd, heads = C / 8, d = 8;
+    const h = tf.reshape(gn(x, p + '.group_norm'), [B * L, C]);
+    const split = (y) => tf.transpose(tf.reshape(y, [B, L, heads, d]), [0, 2, 1, 3]);
+    const q = split(linear(h, p + '.to_q')), k = split(linear(h, p + '.to_k')), v = split(linear(h, p + '.to_v'));
+    const a = tf.softmax(tf.mul(tf.matMul(q, k, false, true), 1 / Math.sqrt(d)));
+    let o = tf.reshape(tf.transpose(tf.matMul(a, v), [0, 2, 1, 3]), [B * L, C]);
+    o = tf.reshape(linear(o, p + '.to_out.0'), [B, H, Wd, C]);
+    return tf.add(o, x);
+  };
+  const timeEmbed = (t) => { // t: Float32Array length B
+    const half = 8, B = t.length, out = new Float32Array(B * 16);
+    for (let b = 0; b < B; b++) for (let i = 0; i < half; i++) {
+      const f = Math.exp(-Math.log(10000) * i / half) * t[b];
+      out[b * 16 + i] = Math.cos(f); out[b * 16 + half + i] = Math.sin(f);
+    }
+    return tf.tensor(out, [B, 16]);
+  };
+  const hasClass = !!W['class_embedding.weight'];
+  // x: tensor [B,28,28,1]; t: Float32Array [B]; labels: Int32Array [B] (conditional only)
+  // Returns { eps, mid } where mid is the bottleneck feature map [B,7,7,64].
+  function forward(x, t, labels) {
+    return tf.tidy(() => {
+      let emb = linear(silu(linear(timeEmbed(t), 'time_embedding.linear_1')), 'time_embedding.linear_2');
+      if (hasClass) emb = tf.add(emb, tf.gather(W['class_embedding.weight'], tf.tensor1d(labels, 'int32')));
+      let h = conv(x, 'conv_in');
+      const skips = [h];
+      for (let i = 0; i < 3; i++) {
+        h = resnet(h, emb, `down_blocks.${i}.resnets.0`); skips.push(h);
+        if (i < 2) { h = conv(h, `down_blocks.${i}.downsamplers.0.conv`, 2); skips.push(h); }
+      }
+      h = resnet(h, emb, 'mid_block.resnets.0');
+      h = attention(h, 'mid_block.attentions.0');
+      h = resnet(h, emb, 'mid_block.resnets.1');
+      const mid = h;
+      for (let i = 0; i < 3; i++) {
+        for (let j = 0; j < 2; j++) h = resnet(tf.concat([h, skips.pop()], 3), emb, `up_blocks.${i}.resnets.${j}`);
+        if (i < 2) {
+          const [B, H, Wd] = h.shape;
+          h = conv(tf.image.resizeNearestNeighbor(h, [H * 2, Wd * 2]), `up_blocks.${i}.upsamplers.0.conv`);
+        }
+      }
+      const eps = conv(silu(gn(h, 'conv_norm_out')), 'conv_out');
+      return { eps, mid };
+    });
+  }
+  return { forward, hasClass };
+}
+if (typeof module !== 'undefined') module.exports = { makeUNet };
+
+</script>
+<script>
+"use strict";
+// ---------- utilities ----------
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const css = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function randn(n, seed) {
+  const r = mulberry32(seed >>> 0), o = new Float32Array(n);
+  for (let i = 0; i < n; i += 2) {
+    const u = r() || 1e-9, v = r(), m = Math.sqrt(-2 * Math.log(u));
+    o[i] = m * Math.cos(2 * Math.PI * v); if (i + 1 < n) o[i + 1] = m * Math.sin(2 * Math.PI * v);
+  }
+  return o;
+}
+const D = 784;
+// draw a 28x28 array; mode 'img' maps [-1,1]; 'eps' maps [-2.5,2.5]; 'abs' maps [0,2]
+function draw(canvas, arr, mode = 'img', offset = 0) {
+  const ctx = canvas.getContext('2d'), im = ctx.createImageData(28, 28);
+  for (let i = 0; i < D; i++) {
+    let v = arr[offset + i];
+    v = mode === 'img' ? (v + 1) / 2 : mode === 'eps' ? (v + 2.5) / 5 : v / 2;
+    const g = Math.max(0, Math.min(255, Math.round(v * 255)));
+    im.data[4 * i] = im.data[4 * i + 1] = im.data[4 * i + 2] = g; im.data[4 * i + 3] = 255;
+  }
+  ctx.putImageData(im, 0, 0);
+}
+function pxCanvas(cls = 'px') { const c = document.createElement('canvas'); c.width = 28; c.height = 28; c.className = cls; return c; }
+function fitCanvas(c) { const dpr = window.devicePixelRatio || 1, r = c.getBoundingClientRect(); const w = Math.max(1, Math.round(r.width * dpr)), h = Math.max(1, Math.round(r.height * dpr)); if (c.width !== w || c.height !== h) { c.width = w; c.height = h; } return { ctx: c.getContext('2d'), w, h, dpr }; }
+
+// ---------- DDPM schedule (diffusers DDPMScheduler defaults) ----------
+const T = 1000, betas = new Float64Array(T), ab = new Float64Array(T);
+{ let p = 1; for (let i = 0; i < T; i++) { betas[i] = 1e-4 + (0.02 - 1e-4) * i / (T - 1); p *= 1 - betas[i]; ab[i] = p; } }
+const timesteps = (n) => { const r = Math.floor(T / n), out = []; for (let i = n - 1; i >= 0; i--) out.push(i * r); return { ts: out, ratio: r }; };
+function addNoise(x0, eps, t) { const a = Math.sqrt(ab[t]), b = Math.sqrt(1 - ab[t]), o = new Float32Array(eps.length); for (let i = 0; i < o.length; i++) o[i] = a * x0[i % D] + b * eps[i]; return o; }
+
+// ---------- assets ----------
+const A = { digits: null, rep: null, feats: null, uncond: null, cond: null, toy: null };
+const MNIST_LABELS = [];
+function digit(i) { const o = new Float32Array(D); for (let k = 0; k < D; k++) o[k] = A.digits[i * D + k] / 127.5 - 1; return o; }
+// Binary assets are shipped as base64 text (<name>.txt) because the host only serves text/media types.
+async function getBin(u) {
+  const r = await fetch(u + '.txt'); if (!r.ok) throw new Error(u);
+  const s = atob((await r.text()).trim()), b = new Uint8Array(s.length);
+  for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i);
+  return b.buffer;
+}
+async function getJSON(u) { const r = await fetch(u); if (!r.ok) throw new Error(u); return r.json(); }
+const status = (txt, ready) => { $('#status span').textContent = txt; $('#status').classList.toggle('ready', !!ready); };
+
+// ---------- model helpers ----------
+let busy = Promise.resolve();
+function exclusive(fn) { const p = busy.then(fn, fn); busy = p.catch(() => {}); return p; }
+function epsHat(net, xArr, B, tArr, labels) {
+  return tf.tidy(() => { const out = net.forward(tf.tensor(xArr, [B, 28, 28, 1]), tArr, labels); return out.eps; });
+}
+// One DDPM step on Float32Arrays (diffusers DDPMScheduler.step, clip_sample, fixed_small variance)
+function ddpmStep(x, e, t, prevT, z) {
+  const at = ab[t], ap = prevT >= 0 ? ab[prevT] : 1, bt = 1 - at, bp = 1 - ap, ca = at / ap, cb = 1 - ca;
+  const c0 = Math.sqrt(ap) * cb / bt, ct = Math.sqrt(ca) * bp / bt, sa = Math.sqrt(at), sb = Math.sqrt(bt);
+  const sig = t > 0 ? Math.sqrt(Math.max(bp / bt * cb, 1e-20)) : 0;
+  const xn = new Float32Array(x.length), x0 = new Float32Array(x.length);
+  for (let i = 0; i < x.length; i++) {
+    let p = (x[i] - sb * e[i]) / sa; p = p < -1 ? -1 : p > 1 ? 1 : p; x0[i] = p;
+    xn[i] = c0 * p + ct * x[i] + (sig ? sig * z[i] : 0);
+  }
+  return { xn, x0 };
+}
+// Generic sampler. opts: {B, seed, stepSeed, steps, startT, x (init), labels, w, onStep}
+async function sample(opts) {
+  const net = opts.labels ? A.cond : A.uncond;
+  const { B } = opts;
+  let { ts, ratio } = timesteps(opts.steps || 50);
+  if (opts.startT != null) ts = ts.filter((t) => t <= opts.startT);
+  let x = opts.x || randn(B * D, opts.seed);
+  let x0 = x;
+  for (let k = 0; k < ts.length; k++) {
+    const t = ts[k], prev = t - ratio;
+    let e;
+    if (opts.labels) {
+      const xx = new Float32Array(2 * B * D); xx.set(x); xx.set(x, B * D);
+      const lab = new Int32Array(2 * B); lab.set(opts.labels); lab.fill(10, B);
+      const out = await epsHat(net, xx, 2 * B, new Float32Array(2 * B).fill(t), lab).data();
+      e = new Float32Array(B * D); const w = opts.w;
+      for (let i = 0; i < B * D; i++) { const c = out[i], u = out[B * D + i]; e[i] = u + w * (c - u); }
+    } else {
+      e = await epsHat(net, x, B, new Float32Array(B).fill(t)).data();
+    }
+    const z = randn(B * D, (opts.stepSeed ?? opts.seed) * 7919 + t * 31 + 17);
+    ({ xn: x, x0 } = ddpmStep(x, e, t, prev, z));
+    if (opts.onStep) { opts.onStep(x, x0, k, ts.length, prev); await tf.nextFrame(); }
+  }
+  return x;
+}
+
+// ---------- shared digit state + picker ----------
+const S = { digit: null, label: null, listeners: [] };
+const PICKS = [0, 1, 2, 3, 4, 7, 8, 11];
+function setDigit(arr, label) { S.digit = arr; S.label = label; S.listeners.forEach((f) => f()); }
+function onDigit(f) { S.listeners.push(f); }
+function preprocess(canvas) {
+  const ctx = canvas.getContext('2d'), N = canvas.width, d = ctx.getImageData(0, 0, N, N).data;
+  let x0 = N, y0 = N, x1 = -1, y1 = -1;
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) if (d[(y * N + x) * 4] > 40) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+  if (x1 < 0) return null;
+  const w = x1 - x0 + 1, h = y1 - y0 + 1, s = 20 / Math.max(w, h);
+  const tmp = document.createElement('canvas'); tmp.width = 28; tmp.height = 28;
+  const tc = tmp.getContext('2d'); tc.imageSmoothingEnabled = true; tc.imageSmoothingQuality = 'high';
+  const put = (dx, dy) => { tc.fillStyle = '#000'; tc.fillRect(0, 0, 28, 28); tc.drawImage(canvas, x0, y0, w, h, (28 - w * s) / 2 + dx, (28 - h * s) / 2 + dy, w * s, h * s); };
+  put(0, 0);
+  let g = tc.getImageData(0, 0, 28, 28).data, m = 0, cx = 0, cy = 0;
+  for (let i = 0; i < D; i++) { const v = g[4 * i]; m += v; cx += v * (i % 28); cy += v * Math.floor(i / 28); }
+  put(Math.round(13.5 - cx / m), Math.round(13.5 - cy / m));
+  g = tc.getImageData(0, 0, 28, 28).data;
+  const o = new Float32Array(D); for (let i = 0; i < D; i++) o[i] = g[4 * i] / 127.5 - 1;
+  return o;
+}
+function makePad(canvas, onDone) {
+  const ctx = canvas.getContext('2d');
+  const clear = () => { ctx.fillStyle = '#000'; ctx.fillRect(0, 0, canvas.width, canvas.height); };
+  clear(); let drawing = false, last = null;
+  const pos = (e) => { const r = canvas.getBoundingClientRect(); return [(e.clientX - r.left) * canvas.width / r.width, (e.clientY - r.top) * canvas.height / r.height]; };
+  canvas.addEventListener('pointerdown', (e) => { drawing = true; last = pos(e); canvas.setPointerCapture(e.pointerId); e.preventDefault(); });
+  canvas.addEventListener('pointermove', (e) => {
+    if (!drawing) return; const p = pos(e);
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = canvas.width * 0.075; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.beginPath(); ctx.moveTo(last[0], last[1]); ctx.lineTo(p[0], p[1]); ctx.stroke(); last = p;
+  });
+  const end = () => { if (drawing) { drawing = false; onDone && onDone(); } };
+  canvas.addEventListener('pointerup', end); canvas.addEventListener('pointercancel', end);
+  return { clear };
+}
+const pickerSync = [];
+function makeSource(el) {
+  const compact = el.hasAttribute('data-compact');
+  const thumbs = document.createElement('div'); thumbs.className = 'thumbs';
+  const btns = [];
+  PICKS.forEach((idx) => {
+    const b = document.createElement('button'); b.type = 'button'; b.setAttribute('aria-label', 'Digit ' + A.rep.labels[idx]);
+    const c = pxCanvas(''); draw(c, digit(idx)); b.append(c); thumbs.append(b);
+    b.addEventListener('click', () => { setDigit(digit(idx), A.rep.labels[idx]); pickerSync.forEach((f) => f(idx)); });
+    btns.push([b, idx]);
+  });
+  const db = document.createElement('button'); db.type = 'button'; db.className = 'drawbtn'; db.textContent = 'DRAW';
+  thumbs.append(db);
+  const pad = document.createElement('div'); pad.className = 'pad'; pad.hidden = compact;
+  pad.innerHTML = '<canvas width="280" height="280" aria-label="Drawing pad"></canvas><div style="display:grid;gap:8px"><p class="note">Draw a digit with your mouse or finger. It is cropped, scaled and centred the way MNIST was.</p><div class="row"><button type="button">Clear</button></div></div>';
+  const cv = pad.querySelector('canvas');
+  const p = makePad(cv, () => { const a = preprocess(cv); if (a) { setDigit(a, 'drawn'); pickerSync.forEach((f) => f('draw')); } });
+  pad.querySelector('button').addEventListener('click', p.clear);
+  db.addEventListener('click', () => { pad.hidden = false; pickerSync.forEach((f) => f('draw')); });
+  pickerSync.push((sel) => {
+    btns.forEach(([b, i]) => b.setAttribute('aria-pressed', String(i === sel)));
+    db.setAttribute('aria-pressed', String(sel === 'draw'));
+  });
+  el.append(thumbs, pad);
+}
+
+// ---------- station 1: noise ----------
+function histogram(canvas, vals, { lo = -4, hi = 4, bins = 48, gauss = true, color } = {}) {
+  const { ctx, w, h, dpr } = fitCanvas(canvas);
+  ctx.clearRect(0, 0, w, h);
+  const counts = new Array(bins).fill(0), bw = (hi - lo) / bins;
+  for (const v of vals) { const k = Math.floor((v - lo) / bw); if (k >= 0 && k < bins) counts[k]++; }
+  const pad = 22 * dpr, ph = h - pad, n = vals.length;
+  const dens = counts.map((c) => c / n / bw); const g0 = 1 / Math.sqrt(2 * Math.PI);
+  const ymax = Math.max(gauss ? g0 * 1.15 : 0, ...dens.map((d) => Math.min(d, 2.2))) || 1;
+  ctx.fillStyle = color || css('--muted');
+  dens.forEach((d, k) => { const bh = Math.min(d, ymax) / ymax * (ph - 6 * dpr); ctx.fillRect(k * w / bins + dpr, ph - bh, w / bins - 2 * dpr, bh); });
+  if (gauss) {
+    ctx.strokeStyle = css('--eps'); ctx.lineWidth = 2 * dpr; ctx.beginPath();
+    for (let i = 0; i <= 200; i++) { const x = lo + (hi - lo) * i / 200, y = g0 * Math.exp(-x * x / 2); const px = i / 200 * w, py = ph - y / ymax * (ph - 6 * dpr); i ? ctx.lineTo(px, py) : ctx.moveTo(px, py); }
+    ctx.stroke();
+  }
+  ctx.fillStyle = css('--muted'); ctx.font = `${11 * dpr}px "Geist Mono", monospace`; ctx.textAlign = 'center';
+  for (let v = Math.ceil(lo); v <= hi; v++) { const px = (v - lo) / (hi - lo) * w; ctx.fillText(String(v), Math.min(Math.max(px, 8 * dpr), w - 8 * dpr), h - 6 * dpr); }
+  ctx.strokeStyle = css('--line'); ctx.lineWidth = dpr; ctx.beginPath(); ctx.moveTo(0, ph); ctx.lineTo(w, ph); ctx.stroke();
+}
+let nzSeed = 7, nzArr = null;
+function drawNoise() {
+  nzArr = randn(D, nzSeed);
+  draw($('#nzImg'), nzArr, 'eps');
+  let m = 0, s = 0; nzArr.forEach((v) => { m += v; }); m /= D; nzArr.forEach((v) => { s += (v - m) ** 2; }); s = Math.sqrt(s / D);
+  $('#nzStats').textContent = `mean ${m.toFixed(3)} · std ${s.toFixed(3)}`;
+  histogram($('#nzHist'), nzArr, { color: css('--muted') });
+}
+function buildQuiz() {
+  const Q = [[3, 150], [2, 350], [6, 500], [18, 620], [15, 760], [9, 900]];
+  const box = $('#quiz');
+  Q.forEach(([idx, t], k) => {
+    const card = document.createElement('div'); card.className = 'card';
+    const c = pxCanvas(); const x0 = digit(idx); draw(c, addNoise(x0, randn(D, 100 + k), t));
+    const cap = document.createElement('div'); cap.className = 'cap mono note'; cap.style.textAlign = 'center'; cap.textContent = `card ${k + 1} · t=${t}`;
+    const ans = document.createElement('div'); ans.className = 'ans'; ans.innerHTML = '&nbsp;';
+    const b = document.createElement('button'); b.type = 'button'; b.textContent = 'Reveal';
+    b.addEventListener('click', () => {
+      const shown = b.textContent === 'Hide';
+      draw(c, shown ? addNoise(x0, randn(D, 100 + k), t) : x0);
+      ans.innerHTML = shown ? '&nbsp;' : String(A.rep.labels[idx]); b.textContent = shown ? 'Reveal' : 'Hide';
+    });
+    card.append(c, cap, ans, b); box.append(card);
+  });
+}
+
+// ---------- station 2: forward ----------
+let fwSeed = 11;
+function fwRender() {
+  if (!S.digit) return;
+  const t = +$('#fwT').value; $('#fwTout').value = t;
+  const eps = randn(D, fwSeed), xt = addNoise(S.digit, eps, t);
+  draw($('#fwX0'), S.digit); draw($('#fwEps'), eps, 'eps'); draw($('#fwXt'), xt);
+  $('#fwXtCap').textContent = `x_t, t = ${t}`;
+  const a = Math.sqrt(ab[t]), b = Math.sqrt(1 - ab[t]);
+  $('#fwEq').innerHTML = `x<sub>${t}</sub> = <span class="x0">${a.toFixed(3)}</span> · <span class="x0">x₀</span> + <span class="ep">${b.toFixed(3)}</span> · <span class="ep">ε</span>   <span class="num">(${(a * a * 100).toFixed(1)}% signal variance)</span>`;
+  drawSched(t);
+  histogram($('#fwHist'), xt, { lo: -3.5, hi: 3.5, bins: 42, gauss: true, color: css('--sig') });
+}
+function fwStrip() {
+  if (!S.digit) return;
+  const box = $('#fwStrip'); box.innerHTML = ''; const eps = randn(D, fwSeed);
+  [0, 50, 150, 300, 450, 600, 800, 999].forEach((t) => {
+    const f = document.createElement('div'); f.className = 'fig'; const c = pxCanvas(); draw(c, addNoise(S.digit, eps, t));
+    const cap = document.createElement('div'); cap.className = 'cap'; cap.textContent = 't=' + t; f.append(c, cap); box.append(f);
+  });
+}
+function drawSched(t) {
+  const c = $('#fwSched'), { ctx, w, h, dpr } = fitCanvas(c); ctx.clearRect(0, 0, w, h);
+  const L = 30 * dpr, B = 20 * dpr, pw = w - L - 8 * dpr, ph = h - B - 8 * dpr, X = (i) => L + i / 999 * pw, Y = (v) => 8 * dpr + (1 - v) * ph;
+  ctx.strokeStyle = css('--line'); ctx.lineWidth = dpr; ctx.beginPath();
+  [0, 0.5, 1].forEach((v) => { ctx.moveTo(L, Y(v)); ctx.lineTo(L + pw, Y(v)); }); ctx.stroke();
+  ctx.fillStyle = css('--muted'); ctx.font = `${11 * dpr}px "Geist Mono", monospace`; ctx.textAlign = 'right';
+  [0, 0.5, 1].forEach((v) => ctx.fillText(v.toFixed(1), L - 6 * dpr, Y(v) + 4 * dpr));
+  ctx.textAlign = 'center'; [0, 250, 500, 750, 999].forEach((v) => ctx.fillText(String(v), Math.min(X(v), w - 14 * dpr), h - 4 * dpr));
+  const line = (f, col) => { ctx.strokeStyle = col; ctx.lineWidth = 2.5 * dpr; ctx.beginPath(); for (let i = 0; i < T; i += 3) { const p = [X(i), Y(f(i))]; i ? ctx.lineTo(...p) : ctx.moveTo(...p); } ctx.stroke(); };
+  line((i) => Math.sqrt(ab[i]), css('--sig')); line((i) => Math.sqrt(1 - ab[i]), css('--eps'));
+  ctx.strokeStyle = css('--ink'); ctx.setLineDash([4 * dpr, 4 * dpr]); ctx.lineWidth = dpr; ctx.beginPath(); ctx.moveTo(X(t), Y(1)); ctx.lineTo(X(t), Y(0)); ctx.stroke(); ctx.setLineDash([]);
+  [[Math.sqrt(ab[t]), '--sig'], [Math.sqrt(1 - ab[t]), '--eps']].forEach(([v, k]) => { ctx.fillStyle = css(k); ctx.beginPath(); ctx.arc(X(t), Y(v), 4.5 * dpr, 0, 7); ctx.fill(); });
+}
+
+// ---------- station 3: denoise ----------
+let dnSeed = 23, dnTimer = 0;
+async function dnRender() {
+  if (!S.digit || !A.uncond) return;
+  const t = +$('#dnT').value; $('#dnTout').value = t;
+  const eps = randn(D, dnSeed), xt = addNoise(S.digit, eps, t);
+  const e = await exclusive(() => epsHat(A.uncond, xt, 1, new Float32Array([t])).data());
+  const sa = Math.sqrt(ab[t]), sb = Math.sqrt(1 - ab[t]);
+  const x0 = new Float32Array(D), err = new Float32Array(D); let mse = 0;
+  for (let i = 0; i < D; i++) { x0[i] = Math.max(-1, Math.min(1, (xt[i] - sb * e[i]) / sa)); err[i] = Math.abs(e[i] - eps[i]); mse += (e[i] - eps[i]) ** 2; }
+  mse /= D;
+  draw($('#dnXt'), xt); draw($('#dnEps'), eps, 'eps'); draw($('#dnEpsHat'), e, 'eps'); draw($('#dnErr'), err, 'abs'); draw($('#dnX0'), x0); draw($('#dnTrue'), S.digit);
+  $('#dnEq').innerHTML = `loss = mean((<span class="ep">ε̂</span> − <span class="ep">ε</span>)²) = <b>${mse.toFixed(4)}</b><br><span class="num">guessing ε̂ = 0 would score ≈ 1.0</span>`;
+}
+async function dnStrip() {
+  if (!S.digit || !A.uncond) return;
+  const ts = [50, 200, 350, 500, 650, 800, 950], B = ts.length, eps = randn(D, dnSeed);
+  const xs = new Float32Array(B * D); ts.forEach((t, k) => xs.set(addNoise(S.digit, eps, t), k * D));
+  const e = await exclusive(() => epsHat(A.uncond, xs, B, new Float32Array(ts)).data());
+  const box = $('#dnStrip'); box.innerHTML = '';
+  ts.forEach((t, k) => {
+    const sa = Math.sqrt(ab[t]), sb = Math.sqrt(1 - ab[t]), x0 = new Float32Array(D), xt = xs.subarray(k * D, k * D + D);
+    for (let i = 0; i < D; i++) x0[i] = Math.max(-1, Math.min(1, (xt[i] - sb * e[k * D + i]) / sa));
+    const f = document.createElement('div'); f.className = 'fig';
+    const c1 = pxCanvas(); draw(c1, xt); const c2 = pxCanvas(); draw(c2, x0); c2.style.outline = `2px solid ${css('--sig')}`; c2.style.outlineOffset = '2px';
+    const cap = document.createElement('div'); cap.className = 'cap'; cap.textContent = 't=' + t; f.append(c1, c2, cap); box.append(f);
+  });
+}
+
+// ---------- station 4: generate ----------
+const genCells = [], cfgCells = [];
+function makeGrid(box, cells, n) { for (let i = 0; i < n; i++) { const c = pxCanvas(); c.style.borderRadius = '3px'; box.append(c); cells.push(c); } }
+let genShowX0 = false, genRunning = false;
+async function genRun(sameStart) {
+  if (!A.uncond || genRunning) return; genRunning = true;
+  const seed = +$('#genSeed').value || 0, steps = +$('#genSteps').value, B = 16;
+  const stepSeed = sameStart ? Math.floor(Math.random() * 1e6) : seed;
+  $('#genRun').disabled = $('#genResample').disabled = true;
+  const strip = $('#genStrip'); strip.innerHTML = '';
+  const snapAt = new Set([0, Math.floor(steps * 0.1), Math.floor(steps * 0.2), Math.floor(steps * 0.4), Math.floor(steps * 0.7), steps - 1]);
+  const addSnap = (arr, label) => { const f = document.createElement('div'); f.className = 'fig'; const c = pxCanvas(); draw(c, arr); const cap = document.createElement('div'); cap.className = 'cap'; cap.textContent = label; f.append(c, cap); strip.append(f); };
+  const x0 = randn(B * D, seed);
+  for (let i = 0; i < B; i++) draw(genCells[i], x0, 'eps', i * D);
+  addSnap(x0.slice(0, D).map((v) => Math.max(-1, Math.min(1, v / 2.5))), 'noise');
+  await exclusive(() => sample({
+    B, seed, stepSeed, steps, x: x0,
+    onStep: (x, xh, k, n, prev) => {
+      const src = genShowX0 ? xh : x;
+      for (let i = 0; i < B; i++) draw(genCells[i], src, 'img', i * D);
+      $('#genInfo').textContent = `step ${k + 1}/${n} · t → ${Math.max(prev, 0)}`;
+      if (snapAt.has(k) && k > 0) addSnap(src.slice(0, D), k === n - 1 ? 'final' : `${n - k - 1} left`);
+    },
+  }));
+  $('#genInfo').textContent = sameStart ? 'same start noise, new step noise' : `seed ${seed} · ${steps} steps`;
+  $('#genRun').disabled = $('#genResample').disabled = false; genRunning = false;
+}
+let heroRunning = false;
+async function heroRun() {
+  if (!A.uncond || heroRunning) return; heroRunning = true; $('#heroBtn').disabled = true;
+  const cells = $$('#heroGrid canvas'), B = cells.length, seed = Math.floor(Math.random() * 99999);
+  const x = randn(B * D, seed); cells.forEach((c, i) => draw(c, x, 'eps', i * D));
+  await exclusive(() => sample({ B, seed, steps: 50, x, onStep: (xs, _, k, n, prev) => { cells.forEach((c, i) => draw(c, xs, 'img', i * D)); $('#heroCap').textContent = `denoising step ${k + 1}/${n} · t = ${Math.max(prev, 0)}`; } }));
+  $('#heroCap').textContent = `seed ${seed} · 50 steps · done`; heroRunning = false; $('#heroBtn').disabled = false;
+}
+
+// ---------- toy 2D ----------
+const TOY = { n: 2000, x: null, data: null, net: null, arrows: true, running: false, t: 0 };
+function toyNet(man, buf) {
+  const f = new Float32Array(buf), W = {};
+  for (const [k, [o, s]] of Object.entries(man)) W[k] = tf.tensor(f.subarray(o, o + s.reduce((a, b) => a * b, 1)), s);
+  return (xy, t) => tf.tidy(() => { // xy Float32Array [N*2], t number
+    const N = xy.length / 2, inp = new Float32Array(N * 58);
+    const tf_ = new Float32Array(32); for (let i = 0; i < 16; i++) { const a = t * Math.exp(-Math.log(10000) * i / 16); tf_[i] = Math.cos(a); tf_[16 + i] = Math.sin(a); }
+    for (let n = 0; n < N; n++) {
+      const o = n * 58, x = xy[2 * n], y = xy[2 * n + 1]; inp[o] = x; inp[o + 1] = y;
+      for (let k = 0; k < 6; k++) { const f2 = 2 ** k; inp[o + 2 + k] = Math.sin(x * f2); inp[o + 8 + k] = Math.sin(y * f2); inp[o + 14 + k] = Math.cos(x * f2); inp[o + 20 + k] = Math.cos(y * f2); }
+      inp.set(tf_, o + 26);
+    }
+    const L = (h, p) => tf.add(tf.matMul(h, W[p + '.weight']), W[p + '.bias']);
+    const silu = (h) => tf.mul(h, tf.sigmoid(h));
+    let h = silu(L(tf.tensor(inp, [N, 58]), 'l1'));
+    h = tf.add(silu(L(h, 'l2')), h); h = tf.add(silu(L(h, 'l3')), h);
+    return L(h, 'l4');
+  });
+}
+const VX = 3.6, VY = 1.65;
+function toyDraw(arrowsT) {
+  const c = $('#toyCanvas'), { ctx, w, h, dpr } = fitCanvas(c); ctx.clearRect(0, 0, w, h);
+  const sx = (x) => (x + VX) / (2 * VX) * w, sy = (y) => (VY - y) / (2 * VY) * h;
+  ctx.fillStyle = 'rgba(160,175,200,0.16)'; for (let i = 0; i < TOY.data.length; i++) { const [x, y] = TOY.data[i]; ctx.fillRect(sx(x) - dpr, sy(y) - dpr, 2 * dpr, 2 * dpr); }
+  if (TOY.arrows && arrowsT != null && TOY.net) {
+    const gx = 36, gy = 16, pts = new Float32Array(gx * gy * 2);
+    for (let j = 0; j < gy; j++) for (let i = 0; i < gx; i++) { pts[2 * (j * gx + i)] = -VX + (i + 0.5) * 2 * VX / gx; pts[2 * (j * gx + i) + 1] = -VY + (j + 0.5) * 2 * VY / gy; }
+    const e = TOY.net(pts, arrowsT).dataSync(); TOY.lastE = null;
+    ctx.strokeStyle = css('--eps'); ctx.globalAlpha = 0.55; ctx.lineWidth = 1.2 * dpr;
+    const cell = w / gx * 0.42;
+    for (let k = 0; k < gx * gy; k++) {
+      const dx = -e[2 * k], dy = -e[2 * k + 1], m = Math.hypot(dx, dy) || 1, l = Math.min(1, m / 1.5) * cell;
+      const x = sx(pts[2 * k]), y = sy(pts[2 * k + 1]), ux = dx / m, uy = -dy / m;
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + ux * l, y + uy * l);
+      ctx.lineTo(x + ux * l - (ux * 0.35 - uy * 0.25) * l, y + uy * l - (uy * 0.35 + ux * 0.25) * l); ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  }
+  ctx.fillStyle = '#e8edf5';
+  for (let i = 0; i < TOY.n; i++) ctx.fillRect(sx(TOY.x[2 * i]) - 1.2 * dpr, sy(TOY.x[2 * i + 1]) - 1.2 * dpr, 2.4 * dpr, 2.4 * dpr);
+  $('#toyInfo').textContent = `t = ${TOY.t}`;
+}
+async function toyReverse() {
+  if (TOY.running || !TOY.net) return; TOY.running = true;
+  TOY.x = randn(TOY.n * 2, Math.floor(Math.random() * 1e6)); TOY.t = 999; toyDraw(999);
+  const ts = []; for (let t = 999; t >= 0; t -= 10) ts.push(t);
+  for (let k = 0; k < ts.length; k++) {
+    const t = ts[k], prev = k + 1 < ts.length ? ts[k + 1] : -1;
+    const e = TOY.net(TOY.x, t).dataSync();
+    const at = ab[t], ap = prev >= 0 ? ab[prev] : 1, cb = 1 - at / ap;
+    const c0 = Math.sqrt(ap) * cb / (1 - at), ct = Math.sqrt(at / ap) * (1 - ap) / (1 - at), sg = prev >= 0 ? Math.sqrt((1 - ap) / (1 - at) * cb) : 0;
+    const z = randn(TOY.n * 2, t * 13 + 5);
+    for (let i = 0; i < TOY.x.length; i++) { const x0 = (TOY.x[i] - Math.sqrt(1 - at) * e[i]) / Math.sqrt(at); TOY.x[i] = c0 * x0 + ct * TOY.x[i] + sg * z[i]; }
+    TOY.t = Math.max(prev, 0); toyDraw(k % 4 === 0 || prev < 0 ? Math.max(prev, 0) : null);
+    await new Promise((r) => setTimeout(r, 30));
+  }
+  toyDraw(0); TOY.running = false;
+}
+async function toyForward() {
+  if (TOY.running) return; TOY.running = true;
+  const x0 = new Float32Array(TOY.n * 2); for (let i = 0; i < TOY.n; i++) { const p = TOY.data[i % TOY.data.length]; x0[2 * i] = p[0]; x0[2 * i + 1] = p[1]; }
+  const eps = randn(TOY.n * 2, 99);
+  for (let t = 0; t <= 999; t += 15) {
+    const a = Math.sqrt(ab[t]), b = Math.sqrt(1 - ab[t]); TOY.x = x0.map((v, i) => a * v + b * eps[i]); TOY.t = t;
+    toyDraw(t % 90 === 0 ? t : null); await new Promise((r) => setTimeout(r, 25));
+  }
+  TOY.t = 999; toyDraw(999); TOY.running = false;
+}
+
+// ---------- station 5: representations ----------
+const PAL = ['#4e79a7', '#f28e2b', '#e15759', '#76b7b2', '#59a14f', '#edc948', '#b07aa1', '#ff9da7', '#9c755f', '#8c8fa3'];
+const MAP = { key: 'trained', color: false, hover: -1, drop: null };
+function mapDraw() {
+  const c = $('#mapCanvas'), { ctx, w, h, dpr } = fitCanvas(c); ctx.clearRect(0, 0, w, h);
+  const pts = A.rep.maps[MAP.key], L = A.rep.labels, m = 14 * dpr, X = (v) => m + v * (w - 2 * m), Y = (v) => m + (1 - v) * (h - 2 * m);
+  const ink = css('--ink');
+  for (let i = 0; i < pts.length; i++) {
+    ctx.fillStyle = MAP.color ? PAL[L[i]] : ink; ctx.globalAlpha = MAP.color ? 0.85 : 0.45;
+    ctx.beginPath(); ctx.arc(X(pts[i][0]), Y(pts[i][1]), 2.6 * dpr, 0, 7); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+  if (MAP.hover >= 0) { ctx.strokeStyle = css('--eps'); ctx.lineWidth = 2 * dpr; ctx.beginPath(); ctx.arc(X(pts[MAP.hover][0]), Y(pts[MAP.hover][1]), 7 * dpr, 0, 7); ctx.stroke(); }
+  if (MAP.drop && MAP.key === 'trained') {
+    const [px, py] = MAP.drop; ctx.fillStyle = css('--eps'); ctx.strokeStyle = css('--surface'); ctx.lineWidth = 3 * dpr;
+    ctx.beginPath(); ctx.arc(X(px), Y(py), 9 * dpr, 0, 7); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = css('--ink'); ctx.font = `600 ${12 * dpr}px "Geist Mono", monospace`; ctx.textAlign = 'left'; ctx.fillText('you', X(px) + 13 * dpr, Y(py) + 4 * dpr);
+  }
+  return { X, Y, dpr };
+}
+function mapHover(e) {
+  const c = $('#mapCanvas'), r = c.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  const mx = (e.clientX - r.left) * dpr, my = (e.clientY - r.top) * dpr, m = 14 * dpr, w = c.width, h = c.height;
+  const pts = A.rep.maps[MAP.key]; let best = -1, bd = (16 * dpr) ** 2;
+  for (let i = 0; i < pts.length; i++) { const dx = m + pts[i][0] * (w - 2 * m) - mx, dy = m + (1 - pts[i][1]) * (h - 2 * m) - my, d = dx * dx + dy * dy; if (d < bd) { bd = d; best = i; } }
+  MAP.hover = best; mapDraw();
+  const tip = $('#mapTip');
+  if (best < 0) { tip.hidden = true; return; }
+  draw(tip.querySelector('canvas'), digit(best)); tip.querySelector('span').textContent = MAP.color ? `label ${A.rep.labels[best]}` : `#${best}`;
+  tip.hidden = false; const tx = e.clientX - r.left + 14, ty = e.clientY - r.top + 14;
+  tip.style.left = Math.min(tx, r.width - 70) + 'px'; tip.style.top = Math.min(ty, r.height - 80) + 'px';
+}
+async function dropDigit() {
+  if (!S.digit || !A.uncond) return;
+  const t = A.rep.t, xt = addNoise(S.digit, randn(D, 1), t);
+  const feat = await exclusive(() => tf.tidy(() => { const o = A.uncond.forward(tf.tensor(xt, [1, 28, 28, 1]), new Float32Array([t])); return tf.mean(o.mid, [1, 2]); }).data());
+  const f = new Float32Array(64); for (let i = 0; i < 64; i++) f[i] = (feat[i] - A.rep.mu[i]) / A.rep.sd[i];
+  const N = A.rep.labels.length, d = new Float32Array(N);
+  for (let n = 0; n < N; n++) { let s = 0; for (let i = 0; i < 64; i++) { const q = A.feats[n * 64 + i] - f[i]; s += q * q; } d[n] = s; }
+  const idx = [...d.keys()].sort((a, b) => d[a] - d[b]).slice(0, 10);
+  const P = A.rep.maps.trained; let px = 0, py = 0; const votes = new Array(10).fill(0);
+  idx.forEach((i) => { px += P[i][0] / 10; py += P[i][1] / 10; votes[A.rep.labels[i]]++; });
+  MAP.drop = [px, py];
+  if (MAP.key !== 'trained') setMap('trained'); else mapDraw();
+  const top = votes.indexOf(Math.max(...votes));
+  $('#dropInfo').innerHTML = `Nearest neighbours vote <b>${top}</b> (${votes[top]}/10). The orange dot marks where your digit lands. This is a nearest-neighbour readout of features learned without labels.`;
+}
+function setMap(k) { MAP.key = k; $$('[data-map]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.map === k))); mapDraw(); }
+
+// SDEdit
+let sdPad;
+async function sdeditRun() {
+  if (!A.uncond) return;
+  const x = preprocess($('#sdeditPad')); if (!x) { $('#sdeditOut').innerHTML = '<p class="note" style="grid-column:1/-1">Draw something in the pad first.</p>'; return; }
+  const t0 = +$('#sdeditT').value, B = 4, box = $('#sdeditOut'); box.innerHTML = '';
+  const f0 = document.createElement('div'); f0.className = 'fig'; const c0 = pxCanvas(); draw(c0, x); f0.append(c0, Object.assign(document.createElement('div'), { className: 'cap', textContent: 'your input' })); box.append(f0);
+  const cells = []; for (let i = 0; i < B; i++) { const f = document.createElement('div'); f.className = 'fig'; const c = pxCanvas(); c.style.outline = `2px solid ${css('--sig')}`; c.style.outlineOffset = '2px'; f.append(c, Object.assign(document.createElement('div'), { className: 'cap', textContent: 'repair ' + (i + 1) })); box.append(f); cells.push(c); }
+  const seed = Math.floor(Math.random() * 1e6), eps = randn(B * D, seed), xt = addNoise(x, eps, t0);
+  $('#sdeditRun').disabled = true;
+  await exclusive(() => sample({ B, seed, steps: 50, x: xt, startT: t0, onStep: (xs) => cells.forEach((c, i) => draw(c, xs, 'img', i * D)) }));
+  $('#sdeditRun').disabled = false;
+}
+
+// ---------- station 6: guidance ----------
+const CFG = { label: 3 };
+function cfgEq() {
+  const w = +$('#cfgW').value; $('#cfgWout').value = w.toFixed(1);
+  const lab = CFG.label === 10 ? '∅' : CFG.label;
+  $('#cfgEq').innerHTML = `ε̂ = ε(x_t, ∅) + <b>${w.toFixed(1)}</b> · (ε(x_t, “${lab}”) − ε(x_t, ∅))<br><span class="num">= ${(1 - w).toFixed(1)}·ε∅ + ${w.toFixed(1)}·ε“${lab}”</span>`;
+}
+let cfgRunning = false;
+async function cfgRun() {
+  if (!A.cond || cfgRunning) return; cfgRunning = true; $('#cfgRun').disabled = true;
+  const B = 8, w = +$('#cfgW').value;
+  await exclusive(() => sample({ B, seed: 1234, steps: 50, labels: new Int32Array(B).fill(CFG.label), w,
+    onStep: (x, _, k, n) => { for (let i = 0; i < B; i++) draw(cfgCells[i], x, 'img', i * D); $('#cfgInfo').textContent = `step ${k + 1}/${n}`; } }));
+  $('#cfgInfo').textContent = `prompt “${CFG.label === 10 ? '∅' : CFG.label}” · w = ${w}`; cfgRunning = false; $('#cfgRun').disabled = false;
+}
+
+// ---------- station 7: prompt builder ----------
+function pbRender() {
+  const parts = ['pbSubject', 'pbAction', 'pbStyle', 'pbComp', 'pbLight', 'pbDetail'].map((id) => $('#' + id).value.trim()).filter(Boolean);
+  const p = parts.join(', '); $('#pbOut').textContent = p || '…';
+  // rough CLIP BPE estimate: ~1.3 tokens per word plus punctuation, +2 for start/end tokens
+  const words = (p.match(/[A-Za-z0-9']+/g) || []).length, punct = (p.match(/[^\sA-Za-z0-9']/g) || []).length;
+  const est = Math.round(words * 1.3 + punct) + 2;
+  $('#tokInfo').textContent = `≈ ${est} CLIP tokens of 77${est > 77 ? ' · SD would truncate the end' : ''}`;
+}
+
+// ---------- boot ----------
+function initStatic() {
+  drawNoise();
+  $('#nzBtn').addEventListener('click', () => { nzSeed++; drawNoise(); });
+  $$('#heroGrid').forEach((g) => { for (let i = 0; i < 8; i++) { const c = pxCanvas(); c.style.borderRadius = '4px'; g.append(c); draw(c, randn(D, 500 + i), 'eps'); } });
+  makeGrid($('#genGrid'), genCells, 16); genCells.forEach((c, i) => draw(c, randn(D, 900 + i), 'eps'));
+  makeGrid($('#cfgGrid'), cfgCells, 8); cfgCells.forEach((c, i) => draw(c, randn(D, 700 + i), 'eps'));
+  const pr = $('#cfgPrompts');
+  [...Array(10).keys(), 10].forEach((k) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = k === 10 ? '∅ empty' : `“${k}”`; b.setAttribute('aria-pressed', String(k === CFG.label)); b.addEventListener('click', () => { CFG.label = k; $$('button', pr).forEach((x) => x.setAttribute('aria-pressed', 'false')); b.setAttribute('aria-pressed', 'true'); cfgEq(); cfgRun(); }); pr.append(b); });
+  cfgEq(); $('#cfgW').addEventListener('input', cfgEq); $('#cfgW').addEventListener('change', cfgRun); $('#cfgRun').addEventListener('click', cfgRun);
+  ['pbSubject', 'pbAction', 'pbStyle', 'pbComp', 'pbLight', 'pbDetail'].forEach((id) => $('#' + id).addEventListener('input', pbRender)); pbRender();
+  $('#pbCopy').addEventListener('click', () => {
+    const txt = $('#pbOut').textContent;
+    navigator.clipboard.writeText(txt).then(() => { $('#pbCopied').textContent = 'Copied'; }).catch(() => { const r = document.createRange(); r.selectNodeContents($('#pbOut')); const s = getSelection(); s.removeAllRanges(); s.addRange(r); $('#pbCopied').textContent = 'Selected, press Ctrl/Cmd+C'; });
+  });
+  drawSched(300);
+  sdPad = makePad($('#sdeditPad'));
+  $('#sdeditClear').addEventListener('click', () => sdPad.clear());
+  $('#sdeditT').addEventListener('input', () => { $('#sdeditTout').value = $('#sdeditT').value; });
+  $('#sdeditRun').addEventListener('click', sdeditRun);
+  $('#toyArrows').addEventListener('click', (e) => { TOY.arrows = !TOY.arrows; e.currentTarget.setAttribute('aria-pressed', String(TOY.arrows)); if (TOY.x) toyDraw(TOY.running ? null : TOY.t); });
+  $('#toyRev').addEventListener('click', toyReverse); $('#toyFwd').addEventListener('click', toyForward);
+  $('#genRun').addEventListener('click', () => genRun(false)); $('#genResample').addEventListener('click', () => genRun(true));
+  $('#genShowXt').addEventListener('click', () => { genShowX0 = false; $('#genShowXt').setAttribute('aria-pressed', 'true'); $('#genShowX0').setAttribute('aria-pressed', 'false'); });
+  $('#genShowX0').addEventListener('click', () => { genShowX0 = true; $('#genShowX0').setAttribute('aria-pressed', 'true'); $('#genShowXt').setAttribute('aria-pressed', 'false'); });
+  $('#heroBtn').addEventListener('click', heroRun);
+}
+function initData() {
+  buildQuiz();
+  $$('[data-source]').forEach(makeSource);
+  $('#fwT').addEventListener('input', fwRender);
+  $('#fwNew').addEventListener('click', () => { fwSeed++; fwRender(); fwStrip(); });
+  $('#dnT').addEventListener('input', () => { $('#dnTout').value = $('#dnT').value; clearTimeout(dnTimer); dnTimer = setTimeout(dnRender, 30); });
+  $('#dnNew').addEventListener('click', () => { dnSeed++; dnRender(); dnStrip(); });
+  onDigit(() => { fwRender(); fwStrip(); dnRender(); dnStrip(); $('#dnInfo').textContent = S.label === 'drawn' ? 'your drawing from station 2' : `test digit “${S.label}” from station 2`; });
+  onDigit(() => { if (MAP.ready) dropDigit(); });
+  $$('[data-map]').forEach((b) => b.addEventListener('click', () => setMap(b.dataset.map)));
+  $('#mapColor').addEventListener('click', (e) => { MAP.color = !MAP.color; e.currentTarget.setAttribute('aria-pressed', String(MAP.color)); $('#mapLegend').hidden = !MAP.color; mapDraw(); });
+  $('#mapLegend').innerHTML = PAL.map((c, i) => `<span><i style="background:${c}"></i>${i}</span>`).join('');
+  const mc = $('#mapCanvas');
+  mc.addEventListener('pointermove', mapHover); mc.addEventListener('pointerdown', mapHover);
+  mc.addEventListener('pointerleave', () => { MAP.hover = -1; $('#mapTip').hidden = true; mapDraw(); });
+  mapDraw();
+  setDigit(digit(PICKS[0]), A.rep.labels[PICKS[0]]); pickerSync.forEach((f) => f(PICKS[0]));
+}
+async function boot() {
+  initStatic();
+  try {
+    const [rep, digits, feats] = await Promise.all([getJSON('rep.json'), getBin('digits.u8'), getBin('feats.f32')]);
+    A.rep = rep; A.digits = new Uint8Array(digits); A.feats = new Float32Array(feats);
+    initData();
+  } catch (err) { status('could not load data files'); console.error(err); return; }
+  if (typeof tf === 'undefined') { status('TensorFlow.js failed to load'); return; }
+  try { await tf.setBackend('webgl'); } catch (e) { await tf.setBackend('cpu'); }
+  await tf.ready();
+  try {
+    const [m1, b1] = await Promise.all([getJSON('unet_uncond.json'), getBin('unet_uncond.bin')]);
+    A.uncond = makeUNet(tf, m1, b1);
+    status(`model ready · ${tf.getBackend() === 'webgl' ? 'GPU' : 'CPU, slower'}`, true);
+    fwRender(); dnRender(); dnStrip(); MAP.ready = true;
+    heroRun().then(() => genRun(false));
+  } catch (err) { status('model failed to load'); console.error(err); }
+  try {
+    const [m2, b2] = await Promise.all([getJSON('unet_cond.json'), getBin('unet_cond.bin')]);
+    A.cond = makeUNet(tf, m2, b2); cfgRun();
+  } catch (err) { $('#cfgInfo').textContent = 'conditional model not found'; }
+  try {
+    const [tj, tb] = await Promise.all([getJSON('toy2d.json'), getBin('toy2d.bin')]);
+    TOY.data = tj.data; TOY.net = toyNet(tj.manifest, tb);
+    TOY.x = new Float32Array(TOY.n * 2); for (let i = 0; i < TOY.n; i++) { const p = TOY.data[i % TOY.data.length]; TOY.x[2 * i] = p[0]; TOY.x[2 * i + 1] = p[1]; }
+    TOY.t = 0; toyDraw(30);
+  } catch (err) { console.error(err); }
+}
+let rsz; addEventListener('resize', () => { clearTimeout(rsz); rsz = setTimeout(() => { if (A.rep) { mapDraw(); fwRender(); } drawNoise(); if (TOY.x) toyDraw(TOY.running ? null : TOY.t); }, 120); });
+// ---------- page chrome: plexus background, floating header, scroll reveal ----------
+const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
+function plexus() {
+  const c = $('#plexus'), ctx = c.getContext('2d'), LINK = 120;
+  let P = [], w = 0, h = 0, dpr = 1, raf = 0;
+  const rand = (a, b) => a + Math.random() * (b - a);
+  function resize() {
+    dpr = Math.min(window.devicePixelRatio || 1, 2); w = innerWidth; h = innerHeight;
+    c.width = w * dpr; c.height = h * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const n = w < 768 ? 55 : w < 1024 ? 90 : 130;
+    P = Array.from({ length: n }, () => ({ x: rand(0, w), y: rand(0, h), vx: rand(-.2, .2) || .1, vy: rand(-.2, .2) || .1, r: rand(1.5, 2) }));
+  }
+  function frame() {
+    ctx.clearRect(0, 0, w, h);
+    for (const p of P) {
+      if (!REDUCED) { p.x += p.vx; p.y += p.vy; if (p.x < 0 || p.x > w) p.vx *= -1; if (p.y < 0 || p.y > h) p.vy *= -1; }
+      ctx.fillStyle = 'rgba(255,255,255,.4)'; ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, 7); ctx.fill();
+    }
+    ctx.lineWidth = 1;
+    for (let i = 0; i < P.length; i++) for (let j = i + 1; j < P.length; j++) {
+      const dx = P[i].x - P[j].x, dy = P[i].y - P[j].y, d = Math.hypot(dx, dy);
+      if (d < LINK) { ctx.strokeStyle = `rgba(255,255,255,${(1 - d / LINK) * .2})`; ctx.beginPath(); ctx.moveTo(P[i].x, P[i].y); ctx.lineTo(P[j].x, P[j].y); ctx.stroke(); }
+    }
+    if (!REDUCED && !document.hidden) raf = requestAnimationFrame(frame);
+  }
+  resize(); frame();
+  addEventListener('resize', () => { resize(); if (REDUCED) frame(); });
+  document.addEventListener('visibilitychange', () => { cancelAnimationFrame(raf); if (!document.hidden && !REDUCED) raf = requestAnimationFrame(frame); });
+}
+function chrome() {
+  const top = $('#top'), onScroll = () => top.classList.toggle('scrolled', scrollY > 50);
+  addEventListener('scroll', onScroll, { passive: true }); onScroll();
+  if (!('IntersectionObserver' in window)) return;
+  document.documentElement.classList.add('reveal-on');
+  const rv = new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) { e.target.classList.add('in'); rv.unobserve(e.target); } }), { rootMargin: '0px 0px -8% 0px' });
+  $$('.rv').forEach((el, i) => { if (el.closest('.hero')) el.style.transitionDelay = `${i * 90}ms`; rv.observe(el); });
+  // highlight the station currently on screen in the nav
+  const links = new Map($$('.nav a').map((a) => [a.getAttribute('href').slice(1), a]));
+  const cur = new IntersectionObserver((es) => es.forEach((e) => {
+    if (!e.isIntersecting) return;
+    links.forEach((a) => a.removeAttribute('aria-current'));
+    const a = links.get(e.target.id); a.setAttribute('aria-current', 'true');
+    const nav = a.parentElement, nr = nav.getBoundingClientRect(), ar = a.getBoundingClientRect();
+    if (ar.left < nr.left || ar.right > nr.right) nav.scrollBy({ left: ar.left - nr.left - (nr.width - ar.width) / 2, behavior: 'smooth' });
+  }), { rootMargin: '-45% 0px -50% 0px' });
+  $$('.station').forEach((s) => cur.observe(s));
+}
+plexus(); chrome();
+boot();
+</script>
